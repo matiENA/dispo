@@ -33,11 +33,12 @@ const DISPO_JSON_FILE = path.join(DEFAULT_RUTEO_DIR, 'dispo_novedades.json');
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // =================================================================
-// 1. HEALTH CHECK & DIAGNÓSTICO (Render deployment root)
+// 1. HEALTH CHECK & DIAGNÓSTICO
 // =================================================================
-app.get('/', (req, res) => {
+app.get('/api/ruteo/info', (req, res) => {
   res.json({
     status: 'ONLINE',
     service: 'Microservicio Extractor e Inyector de Ruteos Livianos',
@@ -45,16 +46,15 @@ app.get('/', (req, res) => {
     driveFolderUrl: `https://drive.google.com/drive/folders/${DRIVE_FOLDER_ID}`,
     spreadsheetId: process.env.SPREADSHEET_ID || '1eQ9Y5diL5fwxYTxvseNgZJFbX-lSUQ13axbp3cLiqPc',
     targetSheet: 'sheet - DISPO',
-    reglasFiltrado: 'Ignora "Copy of...", "Copia de..." y archivos históricos consolidados ("Viajes..."). Valida patrón YYYY-MM-DD UTE TPH...',
+    reglasFiltrado: 'Lectura optimizada de 1 solo archivo al día para evitar cuotas API Google [429].',
     endpoints: [
-      'GET /api/ruteo/diag - Diagnóstico en tiempo real de credenciales y conexión con Google Drive',
-      'GET /api/ruteo/procesar - Extrae las 2 listas exclusivamente desde Google Drive',
-      'POST /api/ruteo/procesar - Extrae las 2 listas enviadas en el body (matriz rows)',
-      'POST /api/ruteo/inyectar - Inyecta asignaciones procesadas en Google Sheet y CSV local',
-      'GET /api/ruteo/recepcion - Obtiene información de asignaciones para recepción',
-      'GET /api/ruteo/chofer/:id - Obtiene la asignación objetivo para la tarjeta de la app del chofer',
-      'POST /api/ruteo/feedback - Registra feedback del chofer (👍 CONFIRMADO / 👎 RECHAZADO)',
-      'GET /api/ruteo/recepcion-check - Evaluación de check de recepción (ID, Nombre, Recepción Check)'
+      'GET /api/ruteo/diag - Diagnóstico en tiempo real',
+      'GET /api/ruteo/procesar?fecha=today - Procesa 1 solo archivo (por defecto hoy / más reciente)',
+      'POST /api/ruteo/procesar-hoy - Procesa e inyecta la planilla del día en sheet - DISPO',
+      'POST /api/ruteo/procesar-fecha - Body: { fecha: "YYYY-MM-DD" } para inyectar una fecha específica',
+      'POST /api/ruteo/inyectar - Inyecta asignaciones procesadas',
+      'GET /api/ruteo/recepcion - Información para pantalla de recepción',
+      'POST /api/ruteo/feedback - Registra feedback de chofer (👍 / 👎)'
     ]
   });
 });
@@ -69,32 +69,86 @@ app.get('/api/ruteo/diag', async (req, res) => {
 });
 
 // =================================================================
-// 2. EXTRACCIÓN EXCLUSIVA DESDE GOOGLE DRIVE (Diagrama: 'extraccion')
+// 2. EXTRACCIÓN OPTIMIZADA DESDE GOOGLE DRIVE (1 SOLO ARCHIVO POR DEFECTO)
 // =================================================================
 app.get('/api/ruteo/procesar', async (req, res) => {
   try {
     const folderId = req.query.folderId || DRIVE_FOLDER_ID;
+    const fecha = req.query.fecha || 'today';
 
-    // Extracción exclusiva desde Google Drive Folder 1qpXukDfaovrVltV74NL9WpBzr1Ig916z
-    const resDrive = await extraerNovedadesDesdeDrive(folderId);
+    // Extracción desde Google Drive (por defecto solo 1 archivo para evitar cuota 429)
+    const resDrive = await extraerNovedadesDesdeDrive(folderId, fecha);
 
     if (!resDrive.success) {
       return res.status(400).json({
         success: false,
-        error: resDrive.error || 'Error al conectar con Google Drive. Verifique las credenciales de Service Account.'
+        error: resDrive.error || 'Error al conectar con Google Drive.'
       });
     }
 
     const indiceDias = generarIndiceDias(resDrive.novedades);
     res.json({
       success: true,
-      origen: 'Google Drive Exclusivo',
+      origen: 'Google Drive (Modo Optimizado 1 Archivo)',
       folderId,
       driveFolderUrl: `https://drive.google.com/drive/folders/${folderId}`,
-      totalAsignaciones: resDrive.totalAsignaciones,
+      totalArchivosEncontrados: resDrive.totalArchivosEncontrados,
+      totalArchivosProcesados: resDrive.totalArchivosProcesados,
       archivosProcesados: resDrive.archivosProcesados,
+      totalAsignaciones: resDrive.totalAsignaciones,
       indiceDias,
       novedades: resDrive.novedades
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Endpoint de 1 clic: Procesa e inyecta la planilla de HOY
+app.post('/api/ruteo/procesar-hoy', async (req, res) => {
+  try {
+    const resDrive = await extraerNovedadesDesdeDrive(DRIVE_FOLDER_ID, 'today');
+    if (!resDrive.success || resDrive.novedades.length === 0) {
+      return res.status(400).json({ success: false, error: 'No se encontraron asignaciones para la planilla de hoy.' });
+    }
+
+    guardarEnCsvLocal(resDrive.novedades);
+    const inyeccion = await inyectarEnGoogleSheets(resDrive.novedades);
+
+    res.json({
+      success: true,
+      mensaje: `Planilla de hoy procesada e inyectada exitosamente (${resDrive.totalAsignaciones} asignaciones)`,
+      archivosProcesados: resDrive.archivosProcesados,
+      totalAsignaciones: resDrive.totalAsignaciones,
+      inyeccion
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Endpoint para procesar e inyectar una fecha específica YYYY-MM-DD
+app.post('/api/ruteo/procesar-fecha', async (req, res) => {
+  try {
+    const { fecha } = req.body;
+    if (!fecha) {
+      return res.status(400).json({ success: false, error: 'Se requiere el parámetro "fecha" (formato YYYY-MM-DD)' });
+    }
+
+    const resDrive = await extraerNovedadesDesdeDrive(DRIVE_FOLDER_ID, fecha);
+    if (!resDrive.success || resDrive.novedades.length === 0) {
+      return res.status(400).json({ success: false, error: `No se encontraron asignaciones para la fecha ${fecha}` });
+    }
+
+    guardarEnCsvLocal(resDrive.novedades);
+    const inyeccion = await inyectarEnGoogleSheets(resDrive.novedades);
+
+    res.json({
+      success: true,
+      mensaje: `Planilla para la fecha ${fecha} procesada e inyectada exitosamente (${resDrive.totalAsignaciones} asignaciones)`,
+      archivosProcesados: resDrive.archivosProcesados,
+      totalAsignaciones: resDrive.totalAsignaciones,
+      inyeccion
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

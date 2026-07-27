@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel de Ruteo Liviano - Extracción e Inyección</title>
+
+  <!-- Google Fonts & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --card-bg: #1e293b;
+      --card-border: #334155;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 900px;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 0.5rem;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #60a5fa, #a855f7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      margin-top: 0.3rem;
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+    }
+
+    .card-title {
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .actions-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.25rem;
+    }
+
+    @media (max-width: 640px) {
+      .actions-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.85rem 1.25rem;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #ffffff;
+      background-color: var(--primary);
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      width: 100%;
+      text-align: center;
+    }
+
+    .btn:hover {
+      background-color: var(--primary-hover);
+      transform: translateY(-1px);
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-success {
+      background-color: #059669;
+    }
+    .btn-success:hover {
+      background-color: #047857;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    label {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+
+    input[type="date"] {
+      padding: 0.75rem;
+      border-radius: 8px;
+      border: 1px solid var(--card-border);
+      background-color: #0f172a;
+      color: #ffffff;
+      font-size: 0.95rem;
+      outline: none;
+    }
+
+    input[type="date"]:focus {
+      border-color: var(--primary);
+    }
+
+    .status-box {
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: 8px;
+      background-color: #0f172a;
+      border-left: 4px solid var(--primary);
+      font-family: monospace;
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+      max-height: 250px;
+      overflow-y: auto;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.55rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border-radius: 9999px;
+      text-transform: uppercase;
+    }
+
+    .badge-success { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .badge-danger { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+
+    .code-box {
+      background-color: #0f172a;
+      padding: 1rem;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 0.85rem;
+      color: #38bdf8;
+      overflow-x: auto;
+      margin-top: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>🚛 Control de Extracción de Ruteo Liviano</h1>
+    <p>Lectura diaria de planillas desde Google Drive e Inyección en Google Sheet (sheet - DISPO)</p>
+  </header>
+
+  <!-- SECCIÓN ACCIONES -->
+  <div class="card">
+    <div class="card-title">⚡ Acciones de Extracción Rápidas</div>
+    <div class="actions-grid">
+
+      <!-- Opción 1: Hoy -->
+      <div class="form-group">
+        <label>Planilla del Día (Uso Frecuente)</label>
+        <button id="btnHoy" class="btn btn-success" onclick="procesarHoy()">
+          🚀 Cargar Ruteo de Hoy
+        </button>
+      </div>
+
+      <!-- Opción 2: Fecha Específica -->
+      <div class="form-group">
+        <label>Planilla de Fecha Específica</label>
+        <div style="display: flex; gap: 0.5rem;">
+          <input type="date" id="fechaInput" style="flex: 1;">
+          <button id="btnFecha" class="btn" onclick="procesarFecha()">
+            📅 Cargar
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- PANEL DE ESTADO -->
+  <div class="card">
+    <div class="card-title">
+      <span>📊 Estado y Logs de Extracción</span>
+      <span id="badgeState" class="badge badge-success">LISTO</span>
+    </div>
+
+    <div id="statusOutput" class="status-box">Seleccione una opción arriba para iniciar la extracción.</div>
+  </div>
+
+  <!-- SECCIÓN BOTÓN DENTRO DE GOOGLE SHEETS -->
+  <div class="card">
+    <div class="card-title">🔗 ¿Quieres un Botón dentro de tu Google Sheet?</div>
+    <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+      Puedes agregar este snippet en Google Sheets (menú <b>Extensiones > Apps Script</b>) para ejecutar la carga directamente con un clic dentro de la planilla:
+    </p>
+
+    <div class="code-box">
+function cargarRuteoDelDia() {
+  const url = "https://dispo-yp8n.onrender.com/api/ruteo/procesar-hoy";
+  const options = { method: "post", contentType: "application/json" };
+  const response = UrlFetchApp.fetch(url, options);
+  SpreadsheetApp.getUi().alert("✔ Ruteo cargado: " + response.getContentText());
+}
+    </div>
+  </div>
+</div>
+
+<script>
+  // Inicializar fecha por defecto en el picker
+  document.getElementById('fechaInput').valueAsDate = new Date();
+
+  function log(msg) {
+    const output = document.getElementById('statusOutput');
+    const time = new Date().toLocaleTimeString();
+    output.textContent = `[${time}] ${msg}\n` + output.textContent;
+  }
+
+  function setBusy(isBusy) {
+    document.getElementById('btnHoy').disabled = isBusy;
+    document.getElementById('btnFecha').disabled = isBusy;
+    const badge = document.getElementById('badgeState');
+    if (isBusy) {
+      badge.className = 'badge badge-danger';
+      badge.textContent = 'PROCESANDO...';
+    } else {
+      badge.className = 'badge badge-success';
+      badge.textContent = 'LISTO';
+    }
+  }
+
+  async function procesarHoy() {
+    setBusy(true);
+    log('Buscando y extrayendo planilla del día actual desde Google Drive...');
+    try {
+      const res = await fetch('/api/ruteo/procesar-hoy', { method: 'POST' });
+      const data = await res.json();
+
+      if (data.success) {
+        log(`✔ ÉXITO! ${data.mensaje}`);
+        if (data.archivosProcesados && data.archivosProcesados.length > 0) {
+          log(`📄 Archivo procesado: ${data.archivosProcesados[0].name}`);
+        }
+      } else {
+        log(`❌ Error: ${data.error}`);
+      }
+    } catch (e) {
+      log(`❌ Error de conexión: ${e.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function procesarFecha() {
+    const fecha = document.getElementById('fechaInput').value;
+    if (!fecha) {
+      alert('Por favor seleccione una fecha válida');
+      return;
+    }
+
+    setBusy(true);
+    log(`Buscando planilla para la fecha ${fecha} en Google Drive...`);
+    try {
+      const res = await fetch('/api/ruteo/procesar-fecha', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fecha })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        log(`✔ ÉXITO! ${data.mensaje}`);
+      } else {
+        log(`❌ Error: ${data.error}`);
+      }
+    } catch (e) {
+      log(`❌ Error de conexión: ${e.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+</script>
+
+</body>
+</html>

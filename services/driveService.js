@@ -159,10 +159,13 @@ async function listarArchivosCarpetaDriveRecursivo(rootFolderId = DEFAULT_DRIVE_
   return archivosValidos;
 }
 
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 /**
- * Extrae las asignaciones ruteo (Lista 1 y Lista 2) desde todas las planillas válidas en todos los años/meses.
+ * Extrae las asignaciones ruteo (Lista 1 y Lista 2) desde planillas de Drive.
+ * Por defecto lee únicamente 1 SOLO ARCHIVO (el del día actual o el más reciente) para evitar cuotas [429].
  */
-async function extraerNovedadesDesdeDrive(rootFolderId = DEFAULT_DRIVE_FOLDER_ID) {
+async function extraerNovedadesDesdeDrive(rootFolderId = DEFAULT_DRIVE_FOLDER_ID, fechaFiltro = null) {
   const auth = getAuthClient();
   if (!auth) {
     return { success: false, error: 'Google Service Account credentials no disponibles' };
@@ -172,31 +175,79 @@ async function extraerNovedadesDesdeDrive(rootFolderId = DEFAULT_DRIVE_FOLDER_ID
   const choferesMap = cargarDbChoferes();
   let todasNovedades = [];
 
-  for (const file of archivosValidos) {
-    try {
-      console.log(`[*] Leyendo planilla remota de Drive: [${file.folderPath}] ${file.name} (ID: ${file.id})...`);
-      const doc = new GoogleSpreadsheet(file.id, auth);
-      await doc.loadInfo();
+  if (archivosValidos.length === 0) {
+    return {
+      success: true,
+      rootFolderId,
+      totalArchivosValidos: 0,
+      archivosProcesados: [],
+      totalAsignaciones: 0,
+      novedades: []
+    };
+  }
 
-      // Leer la primera hoja de cálculo o hoja de ruteo
-      const sheet = doc.sheetsByIndex[0];
-      if (!sheet) continue;
+  // Filtrar objetivos
+  let archivosAProcesar = archivosValidos;
 
-      const rows = await sheet.getRows();
-      // Convertir a matriz de cadenas similar al CSV
-      const matrix = [];
-
-      // Fila 1 (Fecha)
-      const headerRow = sheet.headerValues || [];
-      matrix.push(headerRow);
-
-      // Filas de datos
-      for (const row of rows) {
-        matrix.push(row._rawRow || Object.values(row.toObject() || {}));
+  if (fechaFiltro) {
+    if (fechaFiltro === 'today' || fechaFiltro === 'hoy') {
+      const nowStr = new Date().toISOString().split('T')[0];
+      archivosAProcesar = archivosValidos.filter(f => f.name.includes(nowStr));
+      if (archivosAProcesar.length === 0) {
+        // Fallback al archivo más reciente si no hay uno exacto con la fecha de hoy
+        archivosAProcesar = [archivosValidos[0]];
       }
+    } else {
+      // Buscar por fecha específica YYYY-MM-DD
+      archivosAProcesar = archivosValidos.filter(f => f.name.includes(fechaFiltro));
+      if (archivosAProcesar.length === 0) {
+        archivosAProcesar = [archivosValidos[0]];
+      }
+    }
+  } else {
+    // Modo de uso habitual por defecto: LEER SOLO 1 ARCHIVO AL DÍA (el más reciente)
+    archivosAProcesar = [archivosValidos[0]];
+  }
+
+  console.log(`[*] Modo optimizado activo: Leyendo ${archivosAProcesar.length} archivo(s) objetivo (de ${archivosValidos.length} disponibles)...`);
+
+  let accessToken = null;
+  try {
+    const tokens = await auth.authorize();
+    accessToken = tokens.access_token;
+  } catch (authErr) {
+    console.error('[!] Error de autenticación JWT:', authErr.message);
+    return { success: false, error: authErr.message };
+  }
+
+  for (let i = 0; i < archivosAProcesar.length; i++) {
+    const file = archivosAProcesar[i];
+    try {
+      console.log(`[*] Leyendo planilla remota [${i + 1}/${archivosAProcesar.length}]: [${file.folderPath}] ${file.name} (ID: ${file.id})...`);
+      
+      const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${file.id}/values/A1:Z100?valueRenderOption=FORMATTED_VALUE`;
+      const response = await fetch(sheetsUrl, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error ? errData.error.message : `HTTP ${response.status}`);
+      }
+
+      const sheetsData = await response.json();
+      const matrix = sheetsData.values || [];
+
+      if (matrix.length === 0) continue;
 
       const novs = parsearMatrizRuteo(matrix, file.name, choferesMap);
       todasNovedades = todasNovedades.concat(novs);
+
+      if (archivosAProcesar.length > 1 && i < archivosAProcesar.length - 1) {
+        await sleep(1200);
+      }
 
     } catch (err) {
       console.error(`[!] Error procesando archivo ${file.name}:`, err.message);
@@ -206,8 +257,9 @@ async function extraerNovedadesDesdeDrive(rootFolderId = DEFAULT_DRIVE_FOLDER_ID
   return {
     success: true,
     rootFolderId,
-    totalArchivosValidos: archivosValidos.length,
-    archivosProcesados: archivosValidos.map(f => ({ id: f.id, name: f.name, path: f.folderPath })),
+    totalArchivosEncontrados: archivosValidos.length,
+    totalArchivosProcesados: archivosAProcesar.length,
+    archivosProcesados: archivosAProcesar.map(f => ({ id: f.id, name: f.name, path: f.folderPath })),
     totalAsignaciones: todasNovedades.length,
     novedades: todasNovedades
   };
