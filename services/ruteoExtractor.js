@@ -151,8 +151,9 @@ function parsearMatrizRuteo(rows, filename = '', choferesMap = null) {
     const r = rows[rowIdx] || [];
 
     // -------------------------------------------------------------
-    // LISTA 1: Col B (índice 1) Horario, Col C (índice 2) Nombre
+    // LISTA 1: Col A (Unidad), Col B (Horario), Col C (Nombre)
     // -------------------------------------------------------------
+    const uni1 = (r[0] || '').trim();
     const hs1 = (r[1] || '').trim();
     const nom1 = (r[2] || '').trim();
 
@@ -165,13 +166,14 @@ function parsearMatrizRuteo(rows, filename = '', choferesMap = null) {
         chofer_id: choferInfo ? choferInfo.id : `UNMAPPED_${rowIdx + 1}`,
         id_chofer: choferInfo ? choferInfo.id : `UNMAPPED_${rowIdx + 1}`,
         nom: choferInfo ? choferInfo.nombre : nom1,
+        unidad: uni1,
         tipo_novedad: 'ASIGNACION_RUTEO',
         terminal: terminal1,
         fecha_iso: fechaIso,
         fecha_objetivo: fechaCorta,
         horario: horarioFmt,
         srv: terminal1,
-        detalle: `Presentación en ${terminal1} a las ${horarioFmt} (${fechaCorta})`,
+        detalle: `Presentación en ${terminal1} a las ${horarioFmt} (${fechaCorta})${uni1 ? ' - Unidad ' + uni1 : ''}`,
         lista_origen: 'LISTA_1_BC',
         resuelto: false,
         estado_recepcion: 'PENDIENTE'
@@ -179,8 +181,9 @@ function parsearMatrizRuteo(rows, filename = '', choferesMap = null) {
     }
 
     // -------------------------------------------------------------
-    // LISTA 2: Col F (índice 5) Horario, Col G (índice 6) Nombre
+    // LISTA 2: Col D/E (Unidad), Col F (Horario), Col G (Nombre)
     // -------------------------------------------------------------
+    const uni2 = (r[3] || r[4] || '').trim();
     const hs2 = (r[5] || '').trim();
     const nom2 = (r[6] || '').trim();
 
@@ -193,13 +196,14 @@ function parsearMatrizRuteo(rows, filename = '', choferesMap = null) {
         chofer_id: choferInfo2 ? choferInfo2.id : `UNMAPPED_${rowIdx + 1}`,
         id_chofer: choferInfo2 ? choferInfo2.id : `UNMAPPED_${rowIdx + 1}`,
         nom: choferInfo2 ? choferInfo2.nombre : nom2,
+        unidad: uni2,
         tipo_novedad: 'ASIGNACION_RUTEO',
         terminal: terminal2,
         fecha_iso: fechaIso,
         fecha_objetivo: fechaCorta,
         horario: horarioFmt2,
         srv: terminal2,
-        detalle: `Presentación en ${terminal2} a las ${horarioFmt2} (${fechaCorta})`,
+        detalle: `Presentación en ${terminal2} a las ${horarioFmt2} (${fechaCorta})${uni2 ? ' - Unidad ' + uni2 : ''}`,
         lista_origen: 'LISTA_2_FG',
         resuelto: false,
         estado_recepcion: 'PENDIENTE'
