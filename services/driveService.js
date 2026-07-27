@@ -78,8 +78,8 @@ function getAuthClient() {
 }
 
 /**
- * Lista recursivamente todos los archivos válidos explorando la estructura de 2 subdirectorios:
- * Ruteos LIVIANO (1qpXukDfaovrVltV74NL9WpBzr1Ig916z) -> Años (Ruteo Liviano 2026, 2025...) -> Meses (07. Julio 26, 06. Junio 26...) -> Archivos diarios
+ * Lista recursivamente todos los archivos válidos explorando la estructura de subdirectorios:
+ * Ruteos LIVIANO (1qpXukDfaovrVltV74NL9WpBzr1Ig916z) -> Años (Ruteo Liviano 2026...) -> Meses (07. Julio 26...) -> Archivos diarios
  */
 async function listarArchivosCarpetaDriveRecursivo(rootFolderId = DEFAULT_DRIVE_FOLDER_ID) {
   const auth = getAuthClient();
@@ -88,15 +88,15 @@ async function listarArchivosCarpetaDriveRecursivo(rootFolderId = DEFAULT_DRIVE_
     return [];
   }
 
+  let accessToken = null;
   try {
-    // Autenticar previamente el token JWT
-    await auth.authorize();
+    const tokens = await auth.authorize();
+    accessToken = tokens.access_token;
   } catch (authErr) {
     console.error('[!] Error de autenticación JWT de Google Service Account:', authErr.message);
     return [];
   }
 
-  const drive = google.drive({ version: 'v3', auth });
   const archivosValidos = [];
 
   // Cola BFS de carpetas a explorar
@@ -111,18 +111,25 @@ async function listarArchivosCarpetaDriveRecursivo(rootFolderId = DEFAULT_DRIVE_
     try {
       let pageToken = null;
       do {
-        const res = await drive.files.list({
-          auth,
-          q: `'${current.id}' in parents and trashed = false`,
-          fields: 'nextPageToken, files(id, name, mimeType, modifiedTime)',
-          pageSize: 500,
-          pageToken: pageToken,
-          supportsAllDrives: true,
-          includeItemsFromAllDrives: true
+        let url = `https://www.googleapis.com/drive/v3/files?q=%27${current.id}%27+in+parents+and+trashed%3Dfalse&pageSize=500&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=nextPageToken,files(id,name,mimeType,modifiedTime)`;
+        if (pageToken) {
+          url += `&pageToken=${encodeURIComponent(pageToken)}`;
+        }
+
+        const response = await fetch(url, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`
+          }
         });
 
-        const items = res.data.files || [];
-        pageToken = res.data.nextPageToken;
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error ? errData.error.message : `HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        const items = data.files || [];
+        pageToken = data.nextPageToken;
 
         for (const item of items) {
           if (item.mimeType === 'application/vnd.google-apps.folder') {
@@ -237,21 +244,25 @@ async function probaddiagnosticoDrive(folderId = DEFAULT_DRIVE_FOLDER_ID) {
   }
 
   try {
-    await auth.authorize();
+    const tokens = await auth.authorize();
     diag.authStatus = 'EXITO: Token JWT generado correctamente';
 
-    const drive = google.drive({ version: 'v3', auth });
-    const res = await drive.files.list({
-      auth,
-      q: `'${folderId}' in parents and trashed = false`,
-      fields: 'files(id, name, mimeType)',
-      pageSize: 10,
-      supportsAllDrives: true,
-      includeItemsFromAllDrives: true
+    const url = `https://www.googleapis.com/drive/v3/files?q=%27${folderId}%27+in+parents+and+trashed%3Dfalse&pageSize=10&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name,mimeType)`;
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${tokens.access_token}`
+      }
     });
 
-    diag.driveApiStatus = 'EXITO: API de Google Drive respondió correctamente';
-    diag.filesFound = res.data.files || [];
+    const data = await response.json();
+
+    if (!response.ok) {
+      diag.driveApiStatus = 'ERROR';
+      diag.error = data.error || { status: response.status };
+    } else {
+      diag.driveApiStatus = 'EXITO: API de Google Drive respondió correctamente con HTTP 200';
+      diag.filesFound = data.files || [];
+    }
 
   } catch (err) {
     diag.driveApiStatus = 'ERROR';
