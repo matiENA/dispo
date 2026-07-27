@@ -48,10 +48,10 @@ function getAuthClient() {
 }
 
 /**
- * Lista todos los archivos de la carpeta objetivo de Google Drive (1qpXukDfaovrVltV74NL9WpBzr1Ig916z)
- * aplicando los filtros de validación (YYYY-MM-DD UTE TPH, ignora copias e históricos).
+ * Lista recursivamente todos los archivos válidos explorando la estructura de 2 subdirectorios:
+ * Ruteos LIVIANO (1qpXukDfaovrVltV74NL9WpBzr1Ig916z) -> Años (Ruteo Liviano 2026, 2025...) -> Meses (07. Julio 26, 06. Junio 26...) -> Archivos diarios
  */
-async function listarArchivosCarpetaDrive(folderId = DEFAULT_DRIVE_FOLDER_ID) {
+async function listarArchivosCarpetaDriveRecursivo(rootFolderId = DEFAULT_DRIVE_FOLDER_ID) {
   const auth = getAuthClient();
   if (!auth) {
     console.log('[!] Google Service Account no configurada. No se puede listar la carpeta de Drive.');
@@ -59,45 +59,74 @@ async function listarArchivosCarpetaDrive(folderId = DEFAULT_DRIVE_FOLDER_ID) {
   }
 
   const drive = google.drive({ version: 'v3', auth });
+  const archivosValidos = [];
 
-  try {
-    const res = await drive.files.list({
-      q: `'${folderId}' in parents and trashed = false`,
-      fields: 'files(id, name, mimeType, modifiedTime)',
-      pageSize: 100
-    });
+  // Cola BFS de carpetas a explorar
+  const queue = [{ id: rootFolderId, path: 'Ruteos LIVIANO' }];
+  const carpetasVisitadas = new Set();
 
-    const files = res.data.files || [];
-    console.log(`[*] Encontrados ${files.length} archivos en la carpeta de Google Drive ${folderId}`);
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (carpetasVisitadas.has(current.id)) continue;
+    carpetasVisitadas.add(current.id);
 
-    // Aplicar regla de validación de nombres
-    const archivosValidos = files.filter(f => esNombreArchivoValido(f.name));
-    console.log(`[*] Archivos válidos tras filtrado (${archivosValidos.length}):`, archivosValidos.map(f => f.name));
+    try {
+      let pageToken = null;
+      do {
+        const res = await drive.files.list({
+          q: `'${current.id}' in parents and trashed = false`,
+          fields: 'nextPageToken, files(id, name, mimeType, modifiedTime)',
+          pageSize: 500,
+          pageToken: pageToken
+        });
 
-    return archivosValidos;
+        const items = res.data.files || [];
+        pageToken = res.data.nextPageToken;
 
-  } catch (error) {
-    console.error('[!] Error consultando Google Drive API:', error.message);
-    return [];
+        for (const item of items) {
+          if (item.mimeType === 'application/vnd.google-apps.folder') {
+            // Es una subcarpeta (ej: 'Ruteo Liviano 2026', '07. Julio 26')
+            queue.push({
+              id: item.id,
+              path: `${current.path} > ${item.name}`
+            });
+          } else {
+            // Es un archivo diario; validar nombre (YYYY-MM-DD UTE TPH...)
+            if (esNombreArchivoValido(item.name)) {
+              archivosValidos.push({
+                ...item,
+                folderPath: current.path
+              });
+            }
+          }
+        }
+      } while (pageToken);
+
+    } catch (error) {
+      console.error(`[!] Error explorando carpeta '${current.path}' (${current.id}):`, error.message);
+    }
   }
+
+  console.log(`[OK] Recorrido recursivo completado. Total archivos válidos en todos los años y meses: ${archivosValidos.length}`);
+  return archivosValidos;
 }
 
 /**
- * Extrae las asignaciones ruteo (Lista 1 y Lista 2) desde todas las planillas válidas de la carpeta de Drive.
+ * Extrae las asignaciones ruteo (Lista 1 y Lista 2) desde todas las planillas válidas en todos los años/meses.
  */
-async function extraerNovedadesDesdeDrive(folderId = DEFAULT_DRIVE_FOLDER_ID) {
+async function extraerNovedadesDesdeDrive(rootFolderId = DEFAULT_DRIVE_FOLDER_ID) {
   const auth = getAuthClient();
   if (!auth) {
     return { success: false, error: 'Google Service Account credentials no disponibles' };
   }
 
-  const archivosValidos = await listarArchivosCarpetaDrive(folderId);
+  const archivosValidos = await listarArchivosCarpetaDriveRecursivo(rootFolderId);
   const choferesMap = cargarDbChoferes();
   let todasNovedades = [];
 
   for (const file of archivosValidos) {
     try {
-      console.log(`[*] Leyendo planilla remota de Drive: ${file.name} (ID: ${file.id})...`);
+      console.log(`[*] Leyendo planilla remota de Drive: [${file.folderPath}] ${file.name} (ID: ${file.id})...`);
       const doc = new GoogleSpreadsheet(file.id, auth);
       await doc.loadInfo();
 
@@ -128,8 +157,9 @@ async function extraerNovedadesDesdeDrive(folderId = DEFAULT_DRIVE_FOLDER_ID) {
 
   return {
     success: true,
-    folderId,
-    archivosProcesados: archivosValidos.map(f => ({ id: f.id, name: f.name })),
+    rootFolderId,
+    totalArchivosValidos: archivosValidos.length,
+    archivosProcesados: archivosValidos.map(f => ({ id: f.id, name: f.name, path: f.folderPath })),
     totalAsignaciones: todasNovedades.length,
     novedades: todasNovedades
   };
@@ -137,6 +167,7 @@ async function extraerNovedadesDesdeDrive(folderId = DEFAULT_DRIVE_FOLDER_ID) {
 
 module.exports = {
   getAuthClient,
-  listarArchivosCarpetaDrive,
+  listarArchivosCarpetaDrive: listarArchivosCarpetaDriveRecursivo,
+  listarArchivosCarpetaDriveRecursivo,
   extraerNovedadesDesdeDrive
 };
