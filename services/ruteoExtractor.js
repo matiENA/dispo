@@ -225,11 +225,37 @@ function generarIndiceDias(novedades) {
   return indice;
 }
 
+/**
+ * Valida si un nombre de archivo o hoja cumple con el patrón YYYY-MM-DD UTE TPH...
+ * Ignora copias ("Copy of...", "Copia de...") y consolidados mensuales ("Viajes...", "JP1-EURO").
+ */
+function esNombreArchivoValido(name) {
+  if (!name) return false;
+  const upper = name.trim().toUpperCase();
+
+  // 1. Ignorar duplicados o copias
+  if (upper.includes('COPY OF') || upper.includes('COPIA DE')) {
+    return false;
+  }
+
+  // 2. Ignorar estructuras consolidadas mensuales e históricas
+  if (upper.includes('VIAJES ') || upper.includes('CONSOLIDADO') || upper.includes('JP1-EURO')) {
+    return false;
+  }
+
+  // 3. Debe tener el patrón de fecha YYYY-MM-DD y patrón UTE TPH / Dispo
+  const hasDatePattern = /\d{4}-\d{2}-\d{2}/.test(name);
+  const hasUtePattern = upper.includes('UTE TPH') || upper.includes('TPH, TPL, TLC');
+
+  return hasDatePattern && hasUtePattern;
+}
+
 module.exports = {
   normalizeText,
   parseFecha,
   cargarDbChoferes,
   buscarChofer,
   parsearMatrizRuteo,
-  generarIndiceDias
+  generarIndiceDias,
+  esNombreArchivoValido
 };

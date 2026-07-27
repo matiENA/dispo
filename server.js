@@ -8,7 +8,8 @@ const { parse } = require('csv-parse/sync');
 const {
   parsearMatrizRuteo,
   generarIndiceDias,
-  cargarDbChoferes
+  cargarDbChoferes,
+  esNombreArchivoValido
 } = require('./services/ruteoExtractor');
 
 const {
@@ -35,8 +36,9 @@ app.get('/', (req, res) => {
     service: 'Microservicio Extractor e Inyector de Ruteos Livianos',
     spreadsheetId: process.env.SPREADSHEET_ID || '1eQ9Y5diL5fwxYTxvseNgZJFbX-lSUQ13axbp3cLiqPc',
     targetSheet: 'sheet - DISPO',
+    reglasFiltrado: 'Ignora "Copy of...", "Copia de..." y archivos históricos consolidados ("Viajes..."). Valida patrón YYYY-MM-DD UTE TPH...',
     endpoints: [
-      'GET /api/ruteo/procesar - Extrae las 2 listas desde archivos CSV locales',
+      'GET /api/ruteo/procesar - Extrae las 2 listas desde archivos CSV locales válidos',
       'POST /api/ruteo/procesar - Extrae las 2 listas enviadas en el body (matriz rows)',
       'POST /api/ruteo/inyectar - Inyecta asignaciones procesadas en Google Sheet y CSV local',
       'GET /api/ruteo/recepcion - Obtiene información de asignaciones para recepción',
@@ -54,7 +56,7 @@ app.get('/api/ruteo/procesar', (req, res) => {
   try {
     const choferesMap = cargarDbChoferes();
     const files = fs.readdirSync(DEFAULT_RUTEO_DIR)
-      .filter(f => f.endsWith('.csv') && !f.startsWith('sheet -') && !f.startsWith('dispo_'));
+      .filter(f => f.endsWith('.csv') && esNombreArchivoValido(f));
 
     let todasNovedades = [];
     files.forEach(file => {
@@ -111,7 +113,7 @@ app.post('/api/ruteo/inyectar', async (req, res) => {
       // Si no vienen en el body, procesar archivos locales
       const choferesMap = cargarDbChoferes();
       const files = fs.readdirSync(DEFAULT_RUTEO_DIR)
-        .filter(f => f.endsWith('.csv') && !f.startsWith('sheet -') && !f.startsWith('dispo_'));
+        .filter(f => f.endsWith('.csv') && esNombreArchivoValido(f));
 
       novedades = [];
       files.forEach(file => {
