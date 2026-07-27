@@ -21,7 +21,8 @@ const {
 
 const {
   extraerNovedadesDesdeDrive,
-  listarArchivosCarpetaDrive
+  listarArchivosCarpetaDrive,
+  probaddiagnosticoDrive
 } = require('./services/driveService');
 
 const app = express();
@@ -34,7 +35,7 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 // =================================================================
-// 1. HEALTH CHECK & SERVICIO INFO (Render deployment root)
+// 1. HEALTH CHECK & DIAGNÓSTICO (Render deployment root)
 // =================================================================
 app.get('/', (req, res) => {
   res.json({
@@ -46,7 +47,8 @@ app.get('/', (req, res) => {
     targetSheet: 'sheet - DISPO',
     reglasFiltrado: 'Ignora "Copy of...", "Copia de..." y archivos históricos consolidados ("Viajes..."). Valida patrón YYYY-MM-DD UTE TPH...',
     endpoints: [
-      'GET /api/ruteo/procesar - Extrae las 2 listas desde Google Drive o archivos CSV locales',
+      'GET /api/ruteo/diag - Diagnóstico en tiempo real de credenciales y conexión con Google Drive',
+      'GET /api/ruteo/procesar - Extrae las 2 listas exclusivamente desde Google Drive',
       'POST /api/ruteo/procesar - Extrae las 2 listas enviadas en el body (matriz rows)',
       'POST /api/ruteo/inyectar - Inyecta asignaciones procesadas en Google Sheet y CSV local',
       'GET /api/ruteo/recepcion - Obtiene información de asignaciones para recepción',
@@ -55,6 +57,15 @@ app.get('/', (req, res) => {
       'GET /api/ruteo/recepcion-check - Evaluación de check de recepción (ID, Nombre, Recepción Check)'
     ]
   });
+});
+
+app.get('/api/ruteo/diag', async (req, res) => {
+  try {
+    const diag = await probaddiagnosticoDrive();
+    res.json(diag);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // =================================================================

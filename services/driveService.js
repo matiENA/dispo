@@ -112,6 +112,7 @@ async function listarArchivosCarpetaDriveRecursivo(rootFolderId = DEFAULT_DRIVE_
       let pageToken = null;
       do {
         const res = await drive.files.list({
+          auth,
           q: `'${current.id}' in parents and trashed = false`,
           fields: 'nextPageToken, files(id, name, mimeType, modifiedTime)',
           pageSize: 500,
@@ -205,9 +206,70 @@ async function extraerNovedadesDesdeDrive(rootFolderId = DEFAULT_DRIVE_FOLDER_ID
   };
 }
 
+/**
+ * Función de diagnóstico que retorna el estado exacto de autenticación y variables de entorno.
+ */
+async function probaddiagnosticoDrive(folderId = DEFAULT_DRIVE_FOLDER_ID) {
+  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || null;
+  const privateKeyRaw = process.env.GOOGLE_PRIVATE_KEY || null;
+  const credsFileExists = fs.existsSync(path.join(DEFAULT_RUTEO_DIR, 'credentials.json'));
+
+  const diag = {
+    timestamp: new Date().toISOString(),
+    env: {
+      GOOGLE_SERVICE_ACCOUNT_EMAIL: email,
+      GOOGLE_PRIVATE_KEY_CARGADO: !!privateKeyRaw,
+      GOOGLE_PRIVATE_KEY_LONGITUD: privateKeyRaw ? privateKeyRaw.length : 0,
+      CREDENTIALS_JSON_EXISTE: credsFileExists,
+      DRIVE_FOLDER_ID: folderId,
+      SPREADSHEET_ID: process.env.SPREADSHEET_ID || '1eQ9Y5diL5fwxYTxvseNgZJFbX-lSUQ13axbp3cLiqPc'
+    },
+    authStatus: 'PENDIENTE',
+    driveApiStatus: 'PENDIENTE',
+    error: null,
+    filesFound: []
+  };
+
+  const auth = getAuthClient();
+  if (!auth) {
+    diag.authStatus = 'ERROR: No se pudo instanciar JWT (faltan credenciales)';
+    return diag;
+  }
+
+  try {
+    await auth.authorize();
+    diag.authStatus = 'EXITO: Token JWT generado correctamente';
+
+    const drive = google.drive({ version: 'v3', auth });
+    const res = await drive.files.list({
+      auth,
+      q: `'${folderId}' in parents and trashed = false`,
+      fields: 'files(id, name, mimeType)',
+      pageSize: 10,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true
+    });
+
+    diag.driveApiStatus = 'EXITO: API de Google Drive respondió correctamente';
+    diag.filesFound = res.data.files || [];
+
+  } catch (err) {
+    diag.driveApiStatus = 'ERROR';
+    diag.error = {
+      message: err.message,
+      code: err.code,
+      status: err.status,
+      errors: err.errors
+    };
+  }
+
+  return diag;
+}
+
 module.exports = {
   getAuthClient,
   listarArchivosCarpetaDrive: listarArchivosCarpetaDriveRecursivo,
   listarArchivosCarpetaDriveRecursivo,
-  extraerNovedadesDesdeDrive
+  extraerNovedadesDesdeDrive,
+  probaddiagnosticoDrive
 };
