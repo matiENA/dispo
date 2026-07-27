@@ -9,6 +9,8 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 20.11.0
+      - key: DRIVE_FOLDER_ID
+        value: 1qpXukDfaovrVltV74NL9WpBzr1Ig916z
       - key: SPREADSHEET_ID
         value: 1eQ9Y5diL5fwxYTxvseNgZJFbX-lSUQ13axbp3cLiqPc
       - key: GOOGLE_SERVICE_ACCOUNT_EMAIL

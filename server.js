@@ -19,9 +19,15 @@ const {
   realizarRecepcionCheck
 } = require('./services/sheetsService');
 
+const {
+  extraerNovedadesDesdeDrive,
+  listarArchivosCarpetaDrive
+} = require('./services/driveService');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DEFAULT_RUTEO_DIR = __dirname;
+const DRIVE_FOLDER_ID = process.env.DRIVE_FOLDER_ID || '1qpXukDfaovrVltV74NL9WpBzr1Ig916z';
 const DISPO_JSON_FILE = path.join(DEFAULT_RUTEO_DIR, 'dispo_novedades.json');
 
 app.use(cors());
@@ -34,11 +40,13 @@ app.get('/', (req, res) => {
   res.json({
     status: 'ONLINE',
     service: 'Microservicio Extractor e Inyector de Ruteos Livianos',
+    driveFolderId: DRIVE_FOLDER_ID,
+    driveFolderUrl: `https://drive.google.com/drive/folders/${DRIVE_FOLDER_ID}`,
     spreadsheetId: process.env.SPREADSHEET_ID || '1eQ9Y5diL5fwxYTxvseNgZJFbX-lSUQ13axbp3cLiqPc',
     targetSheet: 'sheet - DISPO',
     reglasFiltrado: 'Ignora "Copy of...", "Copia de..." y archivos históricos consolidados ("Viajes..."). Valida patrón YYYY-MM-DD UTE TPH...',
     endpoints: [
-      'GET /api/ruteo/procesar - Extrae las 2 listas desde archivos CSV locales válidos',
+      'GET /api/ruteo/procesar - Extrae las 2 listas desde Google Drive o archivos CSV locales',
       'POST /api/ruteo/procesar - Extrae las 2 listas enviadas en el body (matriz rows)',
       'POST /api/ruteo/inyectar - Inyecta asignaciones procesadas en Google Sheet y CSV local',
       'GET /api/ruteo/recepcion - Obtiene información de asignaciones para recepción',
@@ -52,26 +60,45 @@ app.get('/', (req, res) => {
 // =================================================================
 // 2. EXTRACCIÓN (Diagrama: 'extraccion')
 // =================================================================
-app.get('/api/ruteo/procesar', (req, res) => {
+app.get('/api/ruteo/procesar', async (req, res) => {
   try {
-    const choferesMap = cargarDbChoferes();
-    const files = fs.readdirSync(DEFAULT_RUTEO_DIR)
-      .filter(f => f.endsWith('.csv') && esNombreArchivoValido(f));
+    const fuente = req.query.source || 'auto';
+    const folderId = req.query.folderId || DRIVE_FOLDER_ID;
 
     let todasNovedades = [];
-    files.forEach(file => {
-      const filePath = path.join(DEFAULT_RUTEO_DIR, file);
-      const content = fs.readFileSync(filePath, 'utf-8');
-      const rows = parse(content, { skip_empty_lines: true, relax_column_count: true });
-      const novs = parsearMatrizRuteo(rows, file, choferesMap);
-      todasNovedades = todasNovedades.concat(novs);
-    });
+    let archivosProcesados = [];
+
+    // Si se especifica o hay credenciales, intentar primero procesar desde Google Drive Folder 1qpXukDfaovrVltV74NL9WpBzr1Ig916z
+    if (fuente === 'drive' || (fuente === 'auto' && (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || fs.existsSync(path.join(DEFAULT_RUTEO_DIR, 'credentials.json'))))) {
+      const resDrive = await extraerNovedadesDesdeDrive(folderId);
+      if (resDrive.success && resDrive.totalAsignaciones > 0) {
+        todasNovedades = resDrive.novedades;
+        archivosProcesados = resDrive.archivosProcesados;
+      }
+    }
+
+    // Fallback a archivos locales CSV válidos si no hay resultados de Drive
+    if (todasNovedades.length === 0) {
+      const choferesMap = cargarDbChoferes();
+      const files = fs.readdirSync(DEFAULT_RUTEO_DIR)
+        .filter(f => f.endsWith('.csv') && esNombreArchivoValido(f));
+
+      files.forEach(file => {
+        const filePath = path.join(DEFAULT_RUTEO_DIR, file);
+        const content = fs.readFileSync(filePath, 'utf-8');
+        const rows = parse(content, { skip_empty_lines: true, relax_column_count: true });
+        const novs = parsearMatrizRuteo(rows, file, choferesMap);
+        todasNovedades = todasNovedades.concat(novs);
+      });
+      archivosProcesados = files;
+    }
 
     const indiceDias = generarIndiceDias(todasNovedades);
     res.json({
       success: true,
+      folderId,
       totalAsignaciones: todasNovedades.length,
-      archivosProcesados: files,
+      archivosProcesados,
       indiceDias,
       novedades: todasNovedades
     });
