@@ -225,7 +225,27 @@ async function extraerNovedadesDesdeDrive(rootFolderId = DEFAULT_DRIVE_FOLDER_ID
     try {
       console.log(`[*] Leyendo planilla remota [${i + 1}/${archivosAProcesar.length}]: [${file.folderPath}] ${file.name} (ID: ${file.id})...`);
       
-      const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${file.id}/values/A1:Z100?valueRenderOption=FORMATTED_VALUE`;
+      // Consultar metadatos para encontrar la pestaña 'Dispo'
+      const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${file.id}?fields=sheets.properties.title`;
+      const resMeta = await fetch(metaUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+      
+      let targetTabTitle = '';
+      if (resMeta.ok) {
+        const metaData = await resMeta.json();
+        const sheets = metaData.sheets || [];
+        const dispoSheet = sheets.find(s => s.properties.title.toLowerCase() === 'dispo')
+          || sheets.find(s => s.properties.title.toLowerCase().startsWith('dispo'))
+          || sheets[0];
+          
+        if (dispoSheet) {
+          targetTabTitle = dispoSheet.properties.title;
+        }
+      }
+
+      console.log(`[*] Leyendo pestaña '${targetTabTitle || 'por defecto'}' del archivo ${file.name}...`);
+      const rangeParam = targetTabTitle ? `'${encodeURIComponent(targetTabTitle)}'!A1:Z100` : 'A1:Z100';
+      const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${file.id}/values/${rangeParam}?valueRenderOption=FORMATTED_VALUE`;
+
       const response = await fetch(sheetsUrl, {
         headers: {
           'Authorization': `Bearer ${accessToken}`
