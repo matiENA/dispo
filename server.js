@@ -58,49 +58,32 @@ app.get('/', (req, res) => {
 });
 
 // =================================================================
-// 2. EXTRACCIÓN (Diagrama: 'extraccion')
+// 2. EXTRACCIÓN EXCLUSIVA DESDE GOOGLE DRIVE (Diagrama: 'extraccion')
 // =================================================================
 app.get('/api/ruteo/procesar', async (req, res) => {
   try {
-    const fuente = req.query.source || 'auto';
     const folderId = req.query.folderId || DRIVE_FOLDER_ID;
 
-    let todasNovedades = [];
-    let archivosProcesados = [];
+    // Extracción exclusiva desde Google Drive Folder 1qpXukDfaovrVltV74NL9WpBzr1Ig916z
+    const resDrive = await extraerNovedadesDesdeDrive(folderId);
 
-    // Si se especifica o hay credenciales, intentar primero procesar desde Google Drive Folder 1qpXukDfaovrVltV74NL9WpBzr1Ig916z
-    if (fuente === 'drive' || (fuente === 'auto' && (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || fs.existsSync(path.join(DEFAULT_RUTEO_DIR, 'credentials.json'))))) {
-      const resDrive = await extraerNovedadesDesdeDrive(folderId);
-      if (resDrive.success && resDrive.totalAsignaciones > 0) {
-        todasNovedades = resDrive.novedades;
-        archivosProcesados = resDrive.archivosProcesados;
-      }
-    }
-
-    // Fallback a archivos locales CSV válidos si no hay resultados de Drive
-    if (todasNovedades.length === 0) {
-      const choferesMap = cargarDbChoferes();
-      const files = fs.readdirSync(DEFAULT_RUTEO_DIR)
-        .filter(f => f.endsWith('.csv') && esNombreArchivoValido(f));
-
-      files.forEach(file => {
-        const filePath = path.join(DEFAULT_RUTEO_DIR, file);
-        const content = fs.readFileSync(filePath, 'utf-8');
-        const rows = parse(content, { skip_empty_lines: true, relax_column_count: true });
-        const novs = parsearMatrizRuteo(rows, file, choferesMap);
-        todasNovedades = todasNovedades.concat(novs);
+    if (!resDrive.success) {
+      return res.status(400).json({
+        success: false,
+        error: resDrive.error || 'Error al conectar con Google Drive. Verifique las credenciales de Service Account.'
       });
-      archivosProcesados = files;
     }
 
-    const indiceDias = generarIndiceDias(todasNovedades);
+    const indiceDias = generarIndiceDias(resDrive.novedades);
     res.json({
       success: true,
+      origen: 'Google Drive Exclusivo',
       folderId,
-      totalAsignaciones: todasNovedades.length,
-      archivosProcesados,
+      driveFolderUrl: `https://drive.google.com/drive/folders/${folderId}`,
+      totalAsignaciones: resDrive.totalAsignaciones,
+      archivosProcesados: resDrive.archivosProcesados,
       indiceDias,
-      novedades: todasNovedades
+      novedades: resDrive.novedades
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -120,6 +103,7 @@ app.post('/api/ruteo/procesar', (req, res) => {
 
     res.json({
       success: true,
+      origen: 'Payload Directo',
       totalAsignaciones: novedades.length,
       indiceDias,
       novedades
@@ -137,18 +121,16 @@ app.post('/api/ruteo/inyectar', async (req, res) => {
     let novedades = req.body.novedades;
 
     if (!novedades || !Array.isArray(novedades)) {
-      // Si no vienen en el body, procesar archivos locales
-      const choferesMap = cargarDbChoferes();
-      const files = fs.readdirSync(DEFAULT_RUTEO_DIR)
-        .filter(f => f.endsWith('.csv') && esNombreArchivoValido(f));
-
-      novedades = [];
-      files.forEach(file => {
-        const filePath = path.join(DEFAULT_RUTEO_DIR, file);
-        const content = fs.readFileSync(filePath, 'utf-8');
-        const rows = parse(content, { skip_empty_lines: true, relax_column_count: true });
-        novedades = novedades.concat(parsearMatrizRuteo(rows, file, choferesMap));
-      });
+      // Si no vienen en el body, extraer exclusivamente desde Google Drive
+      const folderId = req.query.folderId || DRIVE_FOLDER_ID;
+      const resDrive = await extraerNovedadesDesdeDrive(folderId);
+      if (!resDrive.success || resDrive.totalAsignaciones === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'No se encontraron asignaciones para inyectar desde Google Drive.'
+        });
+      }
+      novedades = resDrive.novedades;
     }
 
     // 1. Guardar en CSV local y JSON
