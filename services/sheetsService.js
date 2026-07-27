@@ -39,6 +39,18 @@ function guardarEnCsvLocal(novedades, outputCsv = DISPO_CSV_FILE) {
 }
 
 /**
+ * Formatea la clave privada de Google Service Account asegurando saltos de línea PEM válidos.
+ */
+function formatPrivateKey(rawKey) {
+  if (!rawKey) return '';
+  let key = rawKey.trim();
+  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
+    key = key.slice(1, -1);
+  }
+  return key.replace(/\\\\n/g, '\n').replace(/\\n/g, '\n').replace(/\r/g, '').trim();
+}
+
+/**
  * Inicializa y autentica el cliente de Google Sheets.
  */
 async function getGoogleSheetDoc() {
@@ -52,17 +64,16 @@ async function getGoogleSheetDoc() {
       const creds = JSON.parse(fs.readFileSync(credsPath, 'utf-8'));
       return new GoogleSpreadsheet(SPREADSHEET_ID, new JWT({
         email: creds.client_email,
-        key: creds.private_key,
+        key: formatPrivateKey(creds.private_key),
         scopes: ['https://www.googleapis.com/auth/spreadsheets']
       }));
     }
     return null;
   }
 
-  privateKey = privateKey.replace(/\\n/g, '\n');
   const serviceAccountAuth = new JWT({
     email,
-    key: privateKey,
+    key: formatPrivateKey(privateKey),
     scopes: ['https://www.googleapis.com/auth/spreadsheets']
   });
 

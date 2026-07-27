@@ -14,6 +14,24 @@ const DEFAULT_RUTEO_DIR = path.join(__dirname, '..');
 const DEFAULT_DRIVE_FOLDER_ID = process.env.DRIVE_FOLDER_ID || '1qpXukDfaovrVltV74NL9WpBzr1Ig916z';
 
 /**
+ * Formatea la clave privada de Google Service Account asegurando saltos de línea PEM válidos.
+ */
+function formatPrivateKey(rawKey) {
+  if (!rawKey) return '';
+  let key = rawKey.trim();
+
+  // Eliminar comillas envolventes si fueron incluidas en la variable de entorno
+  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
+    key = key.slice(1, -1);
+  }
+
+  // Reemplazar saltos de línea escapados \n o \\n por caracteres de salto de línea reales
+  key = key.replace(/\\\\n/g, '\n').replace(/\\n/g, '\n').replace(/\r/g, '');
+
+  return key.trim();
+}
+
+/**
  * Autentica y obtiene el objeto JWT para Google APIs.
  */
 function getAuthClient() {
@@ -26,7 +44,7 @@ function getAuthClient() {
       const creds = JSON.parse(fs.readFileSync(credsPath, 'utf-8'));
       return new JWT({
         email: creds.client_email,
-        key: creds.private_key,
+        key: formatPrivateKey(creds.private_key),
         scopes: [
           'https://www.googleapis.com/auth/spreadsheets',
           'https://www.googleapis.com/auth/drive'
@@ -36,10 +54,9 @@ function getAuthClient() {
     return null;
   }
 
-  privateKey = privateKey.replace(/\\n/g, '\n');
   return new JWT({
     email,
-    key: privateKey,
+    key: formatPrivateKey(privateKey),
     scopes: [
       'https://www.googleapis.com/auth/spreadsheets',
       'https://www.googleapis.com/auth/drive'
