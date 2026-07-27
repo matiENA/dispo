@@ -14,21 +14,34 @@ const DEFAULT_RUTEO_DIR = path.join(__dirname, '..');
 const DEFAULT_DRIVE_FOLDER_ID = process.env.DRIVE_FOLDER_ID || '1qpXukDfaovrVltV74NL9WpBzr1Ig916z';
 
 /**
- * Formatea la clave privada de Google Service Account asegurando saltos de línea PEM válidos.
+ * Formatea la clave privada de Google Service Account asegurando saltos de línea PEM válidos (líneas de 64 caracteres).
  */
 function formatPrivateKey(rawKey) {
   if (!rawKey) return '';
-  let key = rawKey.trim();
+  let str = rawKey.trim();
 
-  // Eliminar comillas envolventes si fueron incluidas en la variable de entorno
-  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
-    key = key.slice(1, -1);
+  // Eliminar comillas envolventes si fueron incluidas
+  if ((str.startsWith('"') && str.endsWith('"')) || (str.startsWith("'") && str.endsWith("'"))) {
+    str = str.slice(1, -1).trim();
   }
 
-  // Reemplazar saltos de línea escapados \n o \\n por caracteres de salto de línea reales
-  key = key.replace(/\\\\n/g, '\n').replace(/\\n/g, '\n').replace(/\r/g, '');
+  // Reemplazar saltos de línea escapados \n o \\n por newlines reales
+  str = str.replace(/\\\\n/g, '\n').replace(/\\n/g, '\n').replace(/\r/g, '');
 
-  return key.trim();
+  const header = '-----BEGIN PRIVATE KEY-----';
+  const footer = '-----END PRIVATE KEY-----';
+
+  if (str.includes(header) && str.includes(footer)) {
+    let body = str
+      .replace(header, '')
+      .replace(footer, '')
+      .replace(/\s+/g, '');
+
+    const lines = body.match(/.{1,64}/g) || [body];
+    return `${header}\n${lines.join('\n')}\n${footer}\n`;
+  }
+
+  return str.trim();
 }
 
 /**

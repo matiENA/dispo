@@ -219,22 +219,34 @@ app.post('/api/ruteo/feedback', async (req, res) => {
   }
 });
 
+const {
+  ejecutarExtraccionTrigger,
+  startTrigger,
+  stopTrigger,
+  getTriggerStatus
+} = require('./services/triggerService');
+
 // =================================================================
-// 7. RECEPCIÓN CHECK (Diagrama: 'id, nombre, recepcion check')
+// 8. CONTROLES DEL TRIGGER DE EXTRACCIÓN PERIÓDICA
 // =================================================================
-app.get('/api/ruteo/recepcion-check', (req, res) => {
-  try {
-    const checks = realizarRecepcionCheck();
-    res.json({
-      success: true,
-      total: checks.length,
-      confirmados: checks.filter(c => c.recepcion_check).length,
-      pendientes: checks.filter(c => !c.recepcion_check).length,
-      items: checks
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
+app.get('/api/ruteo/trigger/status', (req, res) => {
+  res.json({ success: true, trigger: getTriggerStatus() });
+});
+
+app.post('/api/ruteo/trigger/start', (req, res) => {
+  const minutos = parseInt(req.body.minutos || req.query.minutos || process.env.EXTRACTION_INTERVAL_MINUTES || '5', 10);
+  const estado = startTrigger(minutos);
+  res.json({ success: true, trigger: estado });
+});
+
+app.post('/api/ruteo/trigger/stop', (req, res) => {
+  const estado = stopTrigger();
+  res.json({ success: true, trigger: estado });
+});
+
+app.post('/api/ruteo/trigger/run', async (req, res) => {
+  const estado = await ejecutarExtraccionTrigger();
+  res.json({ success: true, trigger: estado });
 });
 
 // Arrancar servidor Express
@@ -243,4 +255,10 @@ app.listen(PORT, () => {
   console.log(`[🚀] Microservicio Ruteo Node.js corriendo en puerto ${PORT}`);
   console.log(`[🔗] Target Google Sheet ID: ${process.env.SPREADSHEET_ID || '1eQ9Y5diL5fwxYTxvseNgZJFbX-lSUQ13axbp3cLiqPc'}`);
   console.log(`=======================================================`);
+
+  // Iniciar trigger automático por defecto a menos que se desactive explícitamente
+  if (process.env.ENABLE_AUTO_TRIGGER !== 'false') {
+    const intervalMin = parseInt(process.env.EXTRACTION_INTERVAL_MINUTES || '5', 10);
+    startTrigger(intervalMin);
+  }
 });

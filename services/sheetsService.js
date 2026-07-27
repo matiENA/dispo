@@ -39,15 +39,32 @@ function guardarEnCsvLocal(novedades, outputCsv = DISPO_CSV_FILE) {
 }
 
 /**
- * Formatea la clave privada de Google Service Account asegurando saltos de línea PEM válidos.
+ * Formatea la clave privada de Google Service Account asegurando saltos de línea PEM válidos (líneas de 64 caracteres).
  */
 function formatPrivateKey(rawKey) {
   if (!rawKey) return '';
-  let key = rawKey.trim();
-  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
-    key = key.slice(1, -1);
+  let str = rawKey.trim();
+
+  if ((str.startsWith('"') && str.endsWith('"')) || (str.startsWith("'") && str.endsWith("'"))) {
+    str = str.slice(1, -1).trim();
   }
-  return key.replace(/\\\\n/g, '\n').replace(/\\n/g, '\n').replace(/\r/g, '').trim();
+
+  str = str.replace(/\\\\n/g, '\n').replace(/\\n/g, '\n').replace(/\r/g, '');
+
+  const header = '-----BEGIN PRIVATE KEY-----';
+  const footer = '-----END PRIVATE KEY-----';
+
+  if (str.includes(header) && str.includes(footer)) {
+    let body = str
+      .replace(header, '')
+      .replace(footer, '')
+      .replace(/\s+/g, '');
+
+    const lines = body.match(/.{1,64}/g) || [body];
+    return `${header}\n${lines.join('\n')}\n${footer}\n`;
+  }
+
+  return str.trim();
 }
 
 /**

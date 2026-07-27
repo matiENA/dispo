@@ -13,6 +13,10 @@ services:
         value: 1qpXukDfaovrVltV74NL9WpBzr1Ig916z
       - key: SPREADSHEET_ID
         value: 1eQ9Y5diL5fwxYTxvseNgZJFbX-lSUQ13axbp3cLiqPc
+      - key: ENABLE_AUTO_TRIGGER
+        value: "true"
+      - key: EXTRACTION_INTERVAL_MINUTES
+        value: "5"
       - key: GOOGLE_SERVICE_ACCOUNT_EMAIL
         sync: false
       - key: GOOGLE_PRIVATE_KEY
