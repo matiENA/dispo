@@ -1,0 +1,21 @@
+{
+  "name": "ruteo-extractor-service",
+  "version": "1.0.0",
+  "description": "Servicio Node.js para extracción de ruteos livianos e inyección en Google Sheets para Render",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "csv-parse": "^5.5.6",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "google-auth-library": "^9.10.0",
+    "google-spreadsheet": "^4.1.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

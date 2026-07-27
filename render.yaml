@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: ruteo-extractor-service
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_VERSION
+        value: 20.11.0
+      - key: SPREADSHEET_ID
+        value: 1eQ9Y5diL5fwxYTxvseNgZJFbX-lSUQ13axbp3cLiqPc
+      - key: GOOGLE_SERVICE_ACCOUNT_EMAIL
+        sync: false
+      - key: GOOGLE_PRIVATE_KEY
+        sync: false
