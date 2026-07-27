@@ -88,6 +88,14 @@ async function listarArchivosCarpetaDriveRecursivo(rootFolderId = DEFAULT_DRIVE_
     return [];
   }
 
+  try {
+    // Autenticar previamente el token JWT
+    await auth.authorize();
+  } catch (authErr) {
+    console.error('[!] Error de autenticación JWT de Google Service Account:', authErr.message);
+    return [];
+  }
+
   const drive = google.drive({ version: 'v3', auth });
   const archivosValidos = [];
 
@@ -107,7 +115,9 @@ async function listarArchivosCarpetaDriveRecursivo(rootFolderId = DEFAULT_DRIVE_
           q: `'${current.id}' in parents and trashed = false`,
           fields: 'nextPageToken, files(id, name, mimeType, modifiedTime)',
           pageSize: 500,
-          pageToken: pageToken
+          pageToken: pageToken,
+          supportsAllDrives: true,
+          includeItemsFromAllDrives: true
         });
 
         const items = res.data.files || [];
