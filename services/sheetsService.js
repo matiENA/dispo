@@ -4,7 +4,8 @@ const { GoogleSpreadsheet } = require('google-spreadsheet');
 const { JWT } = require('google-auth-library');
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '1eQ9Y5diL5fwxYTxvseNgZJFbX-lSUQ13axbp3cLiqPc';
-const SHEET_DISPO_NAME = 'sheet - DISPO';
+const SHEET_DISPO_NAME = 'DISPO'; // Pestaña GID 625701060
+const SHEET_DISPO_ALT_NAME = 'sheet - DISPO';
 const DEFAULT_RUTEO_DIR = path.join(__dirname, '..');
 const DISPO_CSV_FILE = path.join(DEFAULT_RUTEO_DIR, 'sheet - DISPO.csv');
 const DISPO_JSON_FILE = path.join(DEFAULT_RUTEO_DIR, 'dispo_novedades.json');
@@ -13,7 +14,7 @@ const DISPO_JSON_FILE = path.join(DEFAULT_RUTEO_DIR, 'dispo_novedades.json');
 let memoriaNovedades = [];
 
 /**
- * Inyecta las asignaciones procesadas en el CSV local.
+ * Inyecta las asignaciones procesadas en el CSV local y guarda el archivo JSON.
  */
 function guardarEnCsvLocal(novedades, outputCsv = DISPO_CSV_FILE) {
   const headers = ['ID_NOVEDAD', 'CHOFER_ID', 'CHOFER_NOMBRE', 'TERMINAL', 'FECHA_ISO', 'FECHA_OBJETIVO', 'HORARIO', 'LISTA_ORIGEN', 'DETALLE', 'ESTADO_RECEPCION'];
@@ -35,7 +36,7 @@ function guardarEnCsvLocal(novedades, outputCsv = DISPO_CSV_FILE) {
   fs.writeFileSync(outputCsv, content, 'utf-8');
   fs.writeFileSync(DISPO_JSON_FILE, JSON.stringify(novedades, null, 2), 'utf-8');
   memoriaNovedades = novedades;
-  console.log(`[OK] Inyectadas ${novedades.length} asignaciones en archivo local ${outputCsv}`);
+  console.log(`[OK] Inyectadas ${novedades.length} asignaciones en archivo local ${outputCsv} y JSON ${DISPO_JSON_FILE}`);
 }
 
 /**
@@ -98,7 +99,7 @@ async function getGoogleSheetDoc() {
 }
 
 /**
- * Inyecta las asignaciones procesadas en la pestaña sheet - DISPO del Google Sheet target.
+ * Inyecta las asignaciones procesadas en la pestaña DISPO (GID 625701060) del Google Sheet target.
  */
 async function inyectarEnGoogleSheets(novedades) {
   try {
@@ -109,13 +110,21 @@ async function inyectarEnGoogleSheets(novedades) {
     }
 
     await doc.loadInfo();
-    let sheet = doc.sheetsByTitle[SHEET_DISPO_NAME];
+    
+    // Buscar por GID 625701060 o por nombre DISPO
+    let sheet = doc.sheetsById[625701060] || doc.sheetsByTitle[SHEET_DISPO_NAME] || doc.sheetsByTitle[SHEET_DISPO_ALT_NAME];
+    
     if (!sheet) {
       sheet = await doc.addSheet({ title: SHEET_DISPO_NAME, headerValues: [
         'ID_NOVEDAD', 'CHOFER_ID', 'CHOFER_NOMBRE', 'TERMINAL',
-        'FECHA_ISO', 'FECHA_OBJETIVO', 'HORARIO', 'LISTA_ORIGEN', 'DETALLE', 'ESTADO_RECEPCION', 'TIMESTAMP_FEEDBACK'
+        'FECHA_ISO', 'FECHA_OBJETIVO', 'HORARIO', 'LISTA_ORIGEN', 'DETALLE', 'ESTADO_RECEPCION', 'TIMESTAMP_FEEDBACK', 'JSON_PAYLOAD'
       ] });
     } else {
+      // Establecer cabeceras si la pestaña no las tiene
+      await sheet.setHeaderRow([
+        'ID_NOVEDAD', 'CHOFER_ID', 'CHOFER_NOMBRE', 'TERMINAL',
+        'FECHA_ISO', 'FECHA_OBJETIVO', 'HORARIO', 'LISTA_ORIGEN', 'DETALLE', 'ESTADO_RECEPCION', 'TIMESTAMP_FEEDBACK', 'JSON_PAYLOAD'
+      ]);
       await sheet.clearRows();
     }
 
@@ -130,11 +139,12 @@ async function inyectarEnGoogleSheets(novedades) {
       'LISTA_ORIGEN': n.lista_origen,
       'DETALLE': n.detalle,
       'ESTADO_RECEPCION': n.estado_recepcion || 'PENDIENTE',
-      'TIMESTAMP_FEEDBACK': n.timestamp_feedback || ''
+      'TIMESTAMP_FEEDBACK': n.timestamp_feedback || '',
+      'JSON_PAYLOAD': JSON.stringify(n)
     }));
 
     await sheet.addRows(rowsToAdd);
-    console.log(`[OK] Inyectadas ${novedades.length} asignaciones en Google Sheet '${SHEET_DISPO_NAME}' (${SPREADSHEET_ID})`);
+    console.log(`[OK] Inyectadas ${novedades.length} asignaciones JSON en Google Sheet '${sheet.title}' (GID ${sheet.sheetId}) de ${SPREADSHEET_ID}`);
     return true;
 
   } catch (err) {
