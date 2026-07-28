@@ -321,9 +321,11 @@ app.listen(PORT, () => {
   console.log(`[🔗] Target Google Sheet ID: ${process.env.SPREADSHEET_ID || '1eQ9Y5diL5fwxYTxvseNgZJFbX-lSUQ13axbp3cLiqPc'}`);
   console.log(`=======================================================`);
 
-  // Iniciar trigger automático por defecto a menos que se desactive explícitamente
-  if (process.env.ENABLE_AUTO_TRIGGER !== 'false') {
+  // Desactivar extracción automática por defecto (solo a demanda vía API o Web Dashboard)
+  if (process.env.ENABLE_AUTO_TRIGGER === 'true') {
     const intervalMin = parseInt(process.env.EXTRACTION_INTERVAL_MINUTES || '5', 10);
     startTrigger(intervalMin);
+  } else {
+    console.log(`[🛑] Extracción automática deshabilitada por defecto. Uso a demanda vía Web Dashboard / API.`);
   }
 });

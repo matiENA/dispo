@@ -237,6 +237,11 @@ function esNombreArchivoValido(name) {
   if (!name) return false;
   const upper = name.trim().toUpperCase();
 
+  // 0. Ignorar archivos de Microsoft Excel (.xlsx, .xls)
+  if (upper.endsWith('.XLSX') || upper.endsWith('.XLS')) {
+    return false;
+  }
+
   // 1. Ignorar duplicados o copias
   if (upper.includes('COPY OF') || upper.includes('COPIA DE')) {
     return false;

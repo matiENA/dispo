@@ -138,8 +138,8 @@ async function listarArchivosCarpetaDriveRecursivo(rootFolderId = DEFAULT_DRIVE_
               id: item.id,
               path: `${current.path} > ${item.name}`
             });
-          } else {
-            // Es un archivo diario; validar nombre (YYYY-MM-DD UTE TPH...)
+          } else if (item.mimeType === 'application/vnd.google-apps.spreadsheet') {
+            // Es una planilla nativa de Google Sheets; validar nombre (YYYY-MM-DD UTE TPH...)
             if (esNombreArchivoValido(item.name)) {
               archivosValidos.push({
                 ...item,
@@ -155,7 +155,14 @@ async function listarArchivosCarpetaDriveRecursivo(rootFolderId = DEFAULT_DRIVE_
     }
   }
 
-  console.log(`[OK] Recorrido recursivo completado. Total archivos válidos en todos los años y meses: ${archivosValidos.length}`);
+  // Ordenar archivos por fecha descendente (los más recientes primero)
+  archivosValidos.sort((a, b) => {
+    const dateA = (a.name.match(/\d{4}-\d{2}-\d{2}/) || [''])[0];
+    const dateB = (b.name.match(/\d{4}-\d{2}-\d{2}/) || [''])[0];
+    return dateB.localeCompare(dateA);
+  });
+
+  console.log(`[OK] Recorrido recursivo completado. Total planillas válidas de Google Sheets: ${archivosValidos.length}`);
   return archivosValidos;
 }
 
