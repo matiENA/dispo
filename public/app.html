@@ -326,13 +326,8 @@
       </div>
 
       <div class="input-group">
-        <label>ID Chofer o DNI</label>
-        <input type="text" id="loginId" placeholder="Ej: drv_0012 o Nombre" value="SANDOVAL">
-      </div>
-
-      <div class="input-group">
         <label>Contraseña APP NOVEDADES</label>
-        <input type="password" id="loginPass" placeholder="Opcional (DB_CHOFERES)">
+        <input type="password" id="loginPass" placeholder="Ingrese su contraseña (DB_CHOFERES)" value="">
       </div>
 
       <button class="btn-login" onclick="ejecutarLogin()">INGRESAR AL RUTEO</button>
@@ -395,12 +390,11 @@
   let currentNovedadId = null;
 
   async function ejecutarLogin() {
-    const idVal = document.getElementById('loginId').value.trim();
     const passVal = document.getElementById('loginPass').value.trim();
     const errDiv = document.getElementById('loginError');
 
-    if (!idVal) {
-      errDiv.textContent = 'Ingrese su ID de chofer o nombre';
+    if (!passVal) {
+      errDiv.textContent = 'Ingrese su contraseña de chofer';
       return;
     }
 
@@ -410,7 +404,7 @@
       const res = await fetch('/api/ruteo/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id_chofer: idVal, password: passVal })
+        body: JSON.stringify({ password: passVal })
       });
 
       const data = await res.json();

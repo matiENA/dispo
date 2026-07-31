@@ -246,22 +246,22 @@ app.get('/api/ruteo/recepcion', (req, res) => {
 // =================================================================
 app.post('/api/ruteo/auth/login', (req, res) => {
   try {
-    const { id_chofer, password, dni } = req.body;
-    if (!id_chofer && !dni) {
-      return res.status(400).json({ success: false, error: 'Se requiere "id_chofer" o "dni"' });
+    const { password, id_chofer, dni } = req.body;
+    const busquedaPass = (password || id_chofer || dni || '').trim();
+
+    if (!busquedaPass) {
+      return res.status(400).json({ success: false, error: 'Ingrese su contraseña de chofer' });
     }
 
     const choferesMap = cargarDbChoferes();
     let choferEncontrado = null;
 
-    const busquedaKey = normalizeText(id_chofer || dni || '');
-
     for (const [key, data] of choferesMap.entries()) {
       if (
-        data.id.toLowerCase() === busquedaKey.toLowerCase() ||
-        data.dni === busquedaKey ||
-        key.includes(busquedaKey) ||
-        busquedaKey.includes(key)
+        (data.pass && data.pass.trim() === busquedaPass) ||
+        (data.dni && data.dni.trim() === busquedaPass) ||
+        (data.id && data.id.toLowerCase() === busquedaPass.toLowerCase()) ||
+        key.toLowerCase() === busquedaPass.toLowerCase()
       ) {
         choferEncontrado = data;
         break;
@@ -269,12 +269,7 @@ app.post('/api/ruteo/auth/login', (req, res) => {
     }
 
     if (!choferEncontrado) {
-      return res.status(401).json({ success: false, error: 'Chofer no encontrado en DB_CHOFERES' });
-    }
-
-    // Validar contraseña si fue proporcionada
-    if (password && choferEncontrado.pass && password.trim() !== choferEncontrado.pass.trim()) {
-      return res.status(401).json({ success: false, error: 'Contraseña incorrecta para la APP NOVEDADES' });
+      return res.status(401).json({ success: false, error: 'Contraseña no encontrada en DB_CHOFERES' });
     }
 
     // Cargar novedades activas
