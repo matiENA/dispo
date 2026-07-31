@@ -217,13 +217,21 @@
         </button>
       </div>
 
-      <!-- Opción 2: Fecha Específica -->
+      <!-- Opción 2: Trigger Manual de Envío de Cards -->
       <div class="form-group">
+        <label>Trigger Manual: Procesar y Transmitir Paquete Diario</label>
+        <button id="btnEnviarCards" class="btn" style="background-color: #8b5cf6;" onclick="enviarCardsManual()">
+          📲 Enviar Cards Diarias a Choferes
+        </button>
+      </div>
+
+      <!-- Opción 3: Fecha Específica -->
+      <div class="form-group" style="grid-column: span 2;">
         <label>Planilla de Fecha Específica</label>
         <div style="display: flex; gap: 0.5rem;">
           <input type="date" id="fechaInput" style="flex: 1;">
           <button id="btnFecha" class="btn" onclick="procesarFecha()">
-            📅 Cargar
+            📅 Cargar por Fecha
           </button>
         </div>
       </div>
@@ -238,22 +246,22 @@
       <span id="badgeState" class="badge badge-success">LISTO</span>
     </div>
 
-    <div id="statusOutput" class="status-box">Seleccione una opción arriba para iniciar la extracción.</div>
+    <div id="statusOutput" class="status-box">Seleccione una opción arriba para iniciar la extracción o el envío de cards.</div>
   </div>
 
   <!-- SECCIÓN BOTÓN DENTRO DE GOOGLE SHEETS -->
   <div class="card">
     <div class="card-title">🔗 ¿Quieres un Botón dentro de tu Google Sheet?</div>
     <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.75rem;">
-      Puedes agregar este snippet en Google Sheets (menú <b>Extensiones > Apps Script</b>) para ejecutar la carga directamente con un clic dentro de la planilla:
+      Puedes agregar este snippet en Google Sheets (menú <b>Extensiones > Apps Script</b>) para ejecutar la carga e inyección directamente con un clic dentro de la planilla:
     </p>
 
     <div class="code-box">
-function cargarRuteoDelDia() {
-  const url = "https://dispo-yp8n.onrender.com/api/ruteo/procesar-hoy";
+function enviarCardsDiariasAChoferes() {
+  const url = "https://dispo-yp8n.onrender.com/api/ruteo/trigger/enviar-cards";
   const options = { method: "post", contentType: "application/json" };
   const response = UrlFetchApp.fetch(url, options);
-  SpreadsheetApp.getUi().alert("✔ Ruteo cargado: " + response.getContentText());
+  SpreadsheetApp.getUi().alert("🚀 Paquete diario de Cards enviado a Choferes:\n" + response.getContentText());
 }
     </div>
   </div>
@@ -279,6 +287,26 @@ function cargarRuteoDelDia() {
     } else {
       badge.className = 'badge badge-success';
       badge.textContent = 'LISTO';
+    }
+  }
+
+  async function enviarCardsManual() {
+    setBusy(true);
+    log('🚀 Ejecutando Trigger Manual: Extrayendo ruteo de hoy e inyectando paquete diario para choferes...');
+    try {
+      const res = await fetch('/api/ruteo/trigger/enviar-cards', { method: 'POST' });
+      const data = await res.json();
+
+      if (data.success) {
+        log(`✔ ÉXITO TRANSMISIÓN! ${data.mensaje}`);
+        log(`📊 Total cards enviadas: ${data.totalCardsEnviadas}`);
+      } else {
+        log(`❌ Error: ${data.error}`);
+      }
+    } catch (e) {
+      log(`❌ Error de conexión: ${e.message}`);
+    } finally {
+      setBusy(false);
     }
   }
 

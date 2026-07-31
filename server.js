@@ -372,8 +372,23 @@ const {
   getTriggerStatus
 } = require('./services/triggerService');
 
+const http = require('http');
+const { Server } = require('socket.io');
+
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: '*' }
+});
+
+io.on('connection', (socket) => {
+  console.log('[⚡ Socket.IO] Nuevo dispositivo de chofer conectado ID:', socket.id);
+  socket.on('disconnect', () => {
+    console.log('[⚡ Socket.IO] Dispositivo desconectado ID:', socket.id);
+  });
+});
+
 // =================================================================
-// 8. CONTROLES DEL TRIGGER DE EXTRACCIÓN PERIÓDICA
+// 8. CONTROLES DEL TRIGGER DE EXTRACCIÓN Y ENVÍO MANUAL DE CARDS
 // =================================================================
 app.get('/api/ruteo/trigger/status', (req, res) => {
   res.json({ success: true, trigger: getTriggerStatus() });
@@ -395,8 +410,55 @@ app.post('/api/ruteo/trigger/run', async (req, res) => {
   res.json({ success: true, trigger: estado });
 });
 
-// Arrancar servidor Express
-app.listen(PORT, () => {
+// =================================================================
+// TRIGGER MANUAL: PROCESAR Y ENVIAR PAQUETE DIARIO DE CARDS A CHOFERES
+// =================================================================
+app.post('/api/ruteo/trigger/enviar-cards', async (req, res) => {
+  try {
+    const fecha = req.body.fecha || req.query.fecha || 'today';
+    console.log(`[🚀 TRIGGER MANUAL] Procesando y enviando paquete diario de cards (${fecha})...`);
+
+    const resDrive = await extraerNovedadesDesdeDrive(DRIVE_FOLDER_ID, fecha);
+
+    if (!resDrive.success) {
+      return res.status(500).json({ success: false, error: resDrive.error || 'Error al leer planilla en Google Drive' });
+    }
+
+    const novedades = resDrive.novedades || [];
+
+    // 1. Guardar local acumulativo
+    guardarEnCsvLocal(novedades);
+
+    // 2. Inyectar/Upsert en Google Sheet target 'DISPO' (GID 625701060)
+    const inyectado = await inyectarEnGoogleSheets(novedades);
+
+    // 3. Emitir evento en tiempo real vía WebSockets a todas las apps conectadas
+    io.emit('novedades_actualizadas', novedades);
+    io.emit('cards_diarias_enviadas', {
+      fecha,
+      totalCards: novedades.length,
+      timestamp: new Date().toISOString()
+    });
+
+    console.log(`[✔ ENVÍO MANUAL] Transmitido paquete diario de ${novedades.length} cards a todos los choferes.`);
+
+    res.json({
+      success: true,
+      mensaje: `🚀 Paquete diario de ${novedades.length} cards procesado, inyectado y transmitido a los choferes.`,
+      fechaProcesada: fecha,
+      totalCardsEnviadas: novedades.length,
+      inyectadoGoogleSheets: inyectado,
+      novedades
+    });
+
+  } catch (error) {
+    console.error('[!] Error en trigger manual enviar-cards:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Arrancar servidor HTTP con soporte para WebSockets Express / Socket.io
+server.listen(PORT, () => {
   console.log(`=======================================================`);
   console.log(`[🚀] Microservicio Ruteo Node.js corriendo en puerto ${PORT}`);
   console.log(`[🔗] Target Google Sheet ID: ${process.env.SPREADSHEET_ID || '1eQ9Y5diL5fwxYTxvseNgZJFbX-lSUQ13axbp3cLiqPc'}`);
