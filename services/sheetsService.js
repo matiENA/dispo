@@ -146,8 +146,12 @@ async function inyectarEnGoogleSheets(nuevasNovedades) {
 
     if (!sheet) {
       sheet = await doc.addSheet({ title: SHEET_DISPO_NAME, headerValues: headers });
-    } else if (!sheet.headerValues || sheet.headerValues.length === 0) {
-      await sheet.setHeaderRow(headers);
+    } else {
+      try {
+        await sheet.loadHeaderRow();
+      } catch (errHeader) {
+        await sheet.setHeaderRow(headers);
+      }
     }
 
     const existingRows = await sheet.getRows();
