@@ -35,6 +35,10 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.get('/app', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'app.html'));
+});
+
 // =================================================================
 // 1. HEALTH CHECK & DIAGNÓSTICO
 // =================================================================
@@ -232,6 +236,82 @@ app.get('/api/ruteo/recepcion', (req, res) => {
       novedades,
       checks
     });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// =================================================================
+// 4. AUTENTICACIÓN Y LOGIN DE CHOFERES (Diagrama: 'login key' -> 'DB_CHOFERES')
+// =================================================================
+app.post('/api/ruteo/auth/login', (req, res) => {
+  try {
+    const { id_chofer, password, dni } = req.body;
+    if (!id_chofer && !dni) {
+      return res.status(400).json({ success: false, error: 'Se requiere "id_chofer" o "dni"' });
+    }
+
+    const choferesMap = cargarDbChoferes();
+    let choferEncontrado = null;
+
+    const busquedaKey = normalizeText(id_chofer || dni || '');
+
+    for (const [key, data] of choferesMap.entries()) {
+      if (
+        data.id.toLowerCase() === busquedaKey.toLowerCase() ||
+        data.dni === busquedaKey ||
+        key.includes(busquedaKey) ||
+        busquedaKey.includes(key)
+      ) {
+        choferEncontrado = data;
+        break;
+      }
+    }
+
+    if (!choferEncontrado) {
+      return res.status(401).json({ success: false, error: 'Chofer no encontrado en DB_CHOFERES' });
+    }
+
+    // Validar contraseña si fue proporcionada
+    if (password && choferEncontrado.pass && password.trim() !== choferEncontrado.pass.trim()) {
+      return res.status(401).json({ success: false, error: 'Contraseña incorrecta para la APP NOVEDADES' });
+    }
+
+    // Cargar novedades activas
+    let novedades = [];
+    if (fs.existsSync(DISPO_JSON_FILE)) {
+      novedades = JSON.parse(fs.readFileSync(DISPO_JSON_FILE, 'utf-8'));
+    }
+
+    const asignacionesChofer = novedades.filter(n =>
+      n.chofer_id === choferEncontrado.id ||
+      n.id_chofer === choferEncontrado.id ||
+      n.nom.toLowerCase().includes(choferEncontrado.nombre.toLowerCase())
+    );
+
+    asignacionesChofer.sort((a, b) => (b.fecha_iso || '').localeCompare(a.fecha_iso || ''));
+    const asignacionActual = asignacionesChofer.length > 0 ? asignacionesChofer[0] : null;
+
+    res.json({
+      success: true,
+      authStatus: 'AUTENTICADO',
+      chofer: {
+        id: choferEncontrado.id,
+        nombre: choferEncontrado.nombre,
+        dni: choferEncontrado.dni
+      },
+      datos: asignacionActual ? {
+        id_novedad: asignacionActual.id,
+        nom: asignacionActual.nom,
+        terminal: asignacionActual.terminal,
+        fecha_objetivo: asignacionActual.fecha_objetivo,
+        horario: asignacionActual.horario,
+        unidad: asignacionActual.unidad || '',
+        estado_recepcion: asignacionActual.estado_recepcion || 'PENDIENTE'
+      } : null,
+      historial: asignacionesChofer
+    });
+
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
