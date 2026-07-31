@@ -254,11 +254,17 @@ app.get('/api/ruteo/chofer/:id', (req, res) => {
       n.nom.toLowerCase().includes(choferId.toLowerCase())
     );
 
+    // Ordenar asignaciones por fecha descendente
+    asignacionesChofer.sort((a, b) => (b.fecha_iso || '').localeCompare(a.fecha_iso || ''));
+
+    const asignacionActual = asignacionesChofer.length > 0 ? asignacionesChofer[0] : null;
+
     res.json({
       success: true,
       choferId,
-      total: asignacionesChofer.length,
-      asignaciones: asignacionesChofer
+      totalAsignaciones: asignacionesChofer.length,
+      asignacionActual,
+      historial: asignacionesChofer
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

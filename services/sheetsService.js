@@ -14,12 +14,37 @@ const DISPO_JSON_FILE = path.join(DEFAULT_RUTEO_DIR, 'dispo_novedades.json');
 let memoriaNovedades = [];
 
 /**
- * Inyecta las asignaciones procesadas en el CSV local y guarda el archivo JSON.
+ * Inyecta las asignaciones procesadas de forma acumulativa en el CSV y JSON local.
+ * Mantiene el historial anterior y preserva estados confirmados de choferes.
  */
-function guardarEnCsvLocal(novedades, outputCsv = DISPO_CSV_FILE) {
+function guardarEnCsvLocal(nuevasNovedades, outputCsv = DISPO_CSV_FILE) {
+  let acumulado = [];
+  if (fs.existsSync(DISPO_JSON_FILE)) {
+    try {
+      acumulado = JSON.parse(fs.readFileSync(DISPO_JSON_FILE, 'utf-8'));
+    } catch (e) {
+      acumulado = [];
+    }
+  }
+
+  for (const n of nuevasNovedades) {
+    const idx = acumulado.findIndex(x => x.id === n.id);
+    if (idx !== -1) {
+      // Actualizar datos de asignación preservando estado de feedback ya registrado
+      acumulado[idx] = {
+        ...acumulado[idx],
+        ...n,
+        estado_recepcion: acumulado[idx].estado_recepcion !== 'PENDIENTE' ? acumulado[idx].estado_recepcion : (n.estado_recepcion || 'PENDIENTE'),
+        timestamp_feedback: acumulado[idx].timestamp_feedback || n.timestamp_feedback || ''
+      };
+    } else {
+      acumulado.push(n);
+    }
+  }
+
   const headers = ['ID_NOVEDAD', 'CHOFER_ID', 'CHOFER_NOMBRE', 'TERMINAL', 'FECHA_ISO', 'FECHA_OBJETIVO', 'HORARIO', 'LISTA_ORIGEN', 'DETALLE', 'ESTADO_RECEPCION'];
   
-  const rows = novedades.map(n => [
+  const rows = acumulado.map(n => [
     n.id,
     n.chofer_id,
     `"${(n.nom || '').replace(/"/g, '""')}"`,
@@ -34,9 +59,9 @@ function guardarEnCsvLocal(novedades, outputCsv = DISPO_CSV_FILE) {
 
   const content = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
   fs.writeFileSync(outputCsv, content, 'utf-8');
-  fs.writeFileSync(DISPO_JSON_FILE, JSON.stringify(novedades, null, 2), 'utf-8');
-  memoriaNovedades = novedades;
-  console.log(`[OK] Inyectadas ${novedades.length} asignaciones en archivo local ${outputCsv} y JSON ${DISPO_JSON_FILE}`);
+  fs.writeFileSync(DISPO_JSON_FILE, JSON.stringify(acumulado, null, 2), 'utf-8');
+  memoriaNovedades = acumulado;
+  console.log(`[OK] Inyectadas acumulativamente ${acumulado.length} asignaciones totales en ${outputCsv} y JSON ${DISPO_JSON_FILE}`);
 }
 
 /**
@@ -99,9 +124,9 @@ async function getGoogleSheetDoc() {
 }
 
 /**
- * Inyecta las asignaciones procesadas en la pestaña DISPO (GID 625701060) del Google Sheet target.
+ * Inyecta o actualiza asignaciones de forma incremental (Upsert) en la pestaña DISPO (GID 625701060) sin borrar el historial.
  */
-async function inyectarEnGoogleSheets(novedades) {
+async function inyectarEnGoogleSheets(nuevasNovedades) {
   try {
     const doc = await getGoogleSheetDoc();
     if (!doc) {
@@ -114,37 +139,60 @@ async function inyectarEnGoogleSheets(novedades) {
     // Buscar por GID 625701060 o por nombre DISPO
     let sheet = doc.sheetsById[625701060] || doc.sheetsByTitle[SHEET_DISPO_NAME] || doc.sheetsByTitle[SHEET_DISPO_ALT_NAME];
     
+    const headers = [
+      'ID_NOVEDAD', 'CHOFER_ID', 'CHOFER_NOMBRE', 'TERMINAL',
+      'FECHA_ISO', 'FECHA_OBJETIVO', 'HORARIO', 'LISTA_ORIGEN', 'DETALLE', 'ESTADO_RECEPCION', 'TIMESTAMP_FEEDBACK', 'JSON_PAYLOAD'
+    ];
+
     if (!sheet) {
-      sheet = await doc.addSheet({ title: SHEET_DISPO_NAME, headerValues: [
-        'ID_NOVEDAD', 'CHOFER_ID', 'CHOFER_NOMBRE', 'TERMINAL',
-        'FECHA_ISO', 'FECHA_OBJETIVO', 'HORARIO', 'LISTA_ORIGEN', 'DETALLE', 'ESTADO_RECEPCION', 'TIMESTAMP_FEEDBACK', 'JSON_PAYLOAD'
-      ] });
-    } else {
-      // Establecer cabeceras si la pestaña no las tiene
-      await sheet.setHeaderRow([
-        'ID_NOVEDAD', 'CHOFER_ID', 'CHOFER_NOMBRE', 'TERMINAL',
-        'FECHA_ISO', 'FECHA_OBJETIVO', 'HORARIO', 'LISTA_ORIGEN', 'DETALLE', 'ESTADO_RECEPCION', 'TIMESTAMP_FEEDBACK', 'JSON_PAYLOAD'
-      ]);
-      await sheet.clearRows();
+      sheet = await doc.addSheet({ title: SHEET_DISPO_NAME, headerValues: headers });
+    } else if (!sheet.headerValues || sheet.headerValues.length === 0) {
+      await sheet.setHeaderRow(headers);
     }
 
-    const rowsToAdd = novedades.map(n => ({
-      'ID_NOVEDAD': n.id,
-      'CHOFER_ID': n.chofer_id,
-      'CHOFER_NOMBRE': n.nom,
-      'TERMINAL': n.terminal,
-      'FECHA_ISO': n.fecha_iso,
-      'FECHA_OBJETIVO': n.fecha_objetivo,
-      'HORARIO': n.horario,
-      'LISTA_ORIGEN': n.lista_origen,
-      'DETALLE': n.detalle,
-      'ESTADO_RECEPCION': n.estado_recepcion || 'PENDIENTE',
-      'TIMESTAMP_FEEDBACK': n.timestamp_feedback || '',
-      'JSON_PAYLOAD': JSON.stringify(n)
-    }));
+    const existingRows = await sheet.getRows();
+    const rowMap = new Map();
+    for (const r of existingRows) {
+      const idNov = r.get('ID_NOVEDAD');
+      if (idNov) rowMap.set(idNov, r);
+    }
 
-    await sheet.addRows(rowsToAdd);
-    console.log(`[OK] Inyectadas ${novedades.length} asignaciones JSON en Google Sheet '${sheet.title}' (GID ${sheet.sheetId}) de ${SPREADSHEET_ID}`);
+    const rowsToAdd = [];
+    let actualizadasCount = 0;
+
+    for (const n of nuevasNovedades) {
+      if (rowMap.has(n.id)) {
+        const row = rowMap.get(n.id);
+        row.set('CHOFER_NOMBRE', n.nom);
+        row.set('TERMINAL', n.terminal);
+        row.set('HORARIO', n.horario);
+        row.set('DETALLE', n.detalle);
+        row.set('JSON_PAYLOAD', JSON.stringify(n));
+        await row.save();
+        actualizadasCount++;
+      } else {
+        rowsToAdd.push({
+          'ID_NOVEDAD': n.id,
+          'CHOFER_ID': n.chofer_id,
+          'CHOFER_NOMBRE': n.nom,
+          'TERMINAL': n.terminal,
+          'FECHA_ISO': n.fecha_iso,
+          'FECHA_OBJETIVO': n.fecha_objetivo,
+          'HORARIO': n.horario,
+          'LISTA_ORIGEN': n.lista_origen,
+          'DETALLE': n.detalle,
+          'ESTADO_RECEPCION': n.estado_recepcion || 'PENDIENTE',
+          'TIMESTAMP_FEEDBACK': n.timestamp_feedback || '',
+          'JSON_PAYLOAD': JSON.stringify(n)
+        });
+      }
+    }
+
+    if (rowsToAdd.length > 0) {
+      await sheet.addRows(rowsToAdd);
+    }
+
+    console.log(`[OK] Inyección acumulativa exitosa en '${sheet.title}' (GID ${sheet.sheetId}): ${rowsToAdd.length} agregadas, ${actualizadasCount} actualizadas.`);
     return true;
 
   } catch (err) {
