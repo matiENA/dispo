@@ -206,33 +206,79 @@ async function inyectarEnGoogleSheets(nuevasNovedades) {
 }
 
 /**
- * Registra el feedback del chofer (👍 CONFIRMADO / 👎 RECHAZADO)
+ * Registra el feedback del chofer (👍 CONFIRMADO / 👎 RECHAZADO) por ID_NOVEDAD.
+ * Usa ID_NOVEDAD como clave primaria estricta para no modificar filas históricas anteriores del mismo chofer.
  */
 async function registrarFeedbackChofer(novedadId, choferId, estadoFeedback) {
   const timestamp = new Date().toISOString();
 
-  // Actualizar en memoria local / JSON
-  let novedad = memoriaNovedades.find(n => n.id === novedadId || n.chofer_id === choferId);
+  // Cargar memoria local si está vacía
+  if (!memoriaNovedades || memoriaNovedades.length === 0) {
+    if (fs.existsSync(DISPO_JSON_FILE)) {
+      try {
+        memoriaNovedades = JSON.parse(fs.readFileSync(DISPO_JSON_FILE, 'utf-8'));
+      } catch (e) {}
+    }
+  }
+
+  // Búsqueda estricta por ID_NOVEDAD (novedadId)
+  let novedad = null;
+  if (novedadId) {
+    novedad = memoriaNovedades.find(n => n.id === novedadId || n.id_novedad === novedadId);
+  }
+
+  // Si no se encuentra por ID_NOVEDAD exacto y hay choferId, buscar la novedad MÁS RECIENTE de ese chofer
+  if (!novedad && choferId) {
+    const novsChofer = memoriaNovedades.filter(n => n.chofer_id === choferId || n.id_chofer === choferId);
+    novsChofer.sort((a, b) => (b.fecha_iso || '').localeCompare(a.fecha_iso || ''));
+    if (novsChofer.length > 0) {
+      novedad = novsChofer[0]; // Toma la asignación más reciente (no la primera/antigua)
+    }
+  }
+
   if (novedad) {
     novedad.estado_recepcion = estadoFeedback; // 'CONFIRMADO' o 'RECHAZADO'
     novedad.timestamp_feedback = timestamp;
     guardarEnCsvLocal(memoriaNovedades);
   }
 
-  // Actualizar en Google Sheets si está disponible
+  const targetIdKey = novedad ? novedad.id : novedadId;
+
+  // Actualizar en Google Sheets por ID_NOVEDAD estricto
   try {
     const doc = await getGoogleSheetDoc();
     if (doc) {
       await doc.loadInfo();
-      const sheet = doc.sheetsByTitle[SHEET_DISPO_NAME];
+      const sheet = doc.sheetsById[625701060] || doc.sheetsByTitle[SHEET_DISPO_NAME] || doc.sheetsByTitle[SHEET_DISPO_ALT_NAME];
       if (sheet) {
+        try {
+          await sheet.loadHeaderRow();
+        } catch (e) {}
+
         const rows = await sheet.getRows();
+        let encontrado = false;
+
+        // 1. Buscar coincidencia exacta por ID_NOVEDAD
         for (const r of rows) {
-          if (r.get('ID_NOVEDAD') === novedadId || r.get('CHOFER_ID') === choferId) {
+          if (r.get('ID_NOVEDAD') === targetIdKey) {
             r.set('ESTADO_RECEPCION', estadoFeedback);
             r.set('TIMESTAMP_FEEDBACK', timestamp);
             await r.save();
+            encontrado = true;
+            console.log(`[OK] Feedback '${estadoFeedback}' guardado en Sheet para ID_NOVEDAD: ${targetIdKey}`);
             break;
+          }
+        }
+
+        // 2. Si no se encontró por ID_NOVEDAD exacto y hay choferId, actualizar la fila MÁS RECIENTE (última) de ese chofer
+        if (!encontrado && choferId) {
+          const rowsChofer = rows.filter(r => r.get('CHOFER_ID') === choferId);
+          if (rowsChofer.length > 0) {
+            const ultimaFilaChofer = rowsChofer[rowsChofer.length - 1]; // Última fila agregada en el Sheet
+            ultimaFilaChofer.set('ESTADO_RECEPCION', estadoFeedback);
+            ultimaFilaChofer.set('TIMESTAMP_FEEDBACK', timestamp);
+            await ultimaFilaChofer.save();
+            console.log(`[OK] Feedback '${estadoFeedback}' guardado en la fila más reciente del chofer ${choferId}`);
           }
         }
       }
@@ -243,7 +289,7 @@ async function registrarFeedbackChofer(novedadId, choferId, estadoFeedback) {
 
   return {
     success: true,
-    novedadId,
+    novedadId: targetIdKey,
     choferId,
     estado_recepcion: estadoFeedback,
     timestamp

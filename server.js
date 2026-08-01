@@ -351,13 +351,20 @@ app.get('/api/ruteo/chofer/:id', (req, res) => {
 // =================================================================
 app.post('/api/ruteo/feedback', async (req, res) => {
   try {
-    const { novedadId, choferId, estado } = req.body;
+    const { novedadId, id_novedad, id, choferId, id_chofer, estado } = req.body;
+    const targetNovedadId = novedadId || id_novedad || id;
+    const targetChoferId = choferId || id_chofer;
+
     if (!estado || !['CONFIRMADO', 'RECHAZADO', 'OK', 'NOK'].includes(estado.toUpperCase())) {
       return res.status(400).json({ success: false, error: 'Estado inválido. Use "CONFIRMADO" (👍) o "RECHAZADO" (👎)' });
     }
 
     const estadoNorm = ['CONFIRMADO', 'OK'].includes(estado.toUpperCase()) ? 'CONFIRMADO' : 'RECHAZADO';
-    const resultado = await registrarFeedbackChofer(novedadId, choferId, estadoNorm);
+    const resultado = await registrarFeedbackChofer(targetNovedadId, targetChoferId, estadoNorm);
+
+    if (io) {
+      io.emit('feedback_registrado', resultado);
+    }
 
     res.json(resultado);
   } catch (error) {
