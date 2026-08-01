@@ -3,12 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Panel de Ruteo Liviano - Extracción e Inyección</title>
-
-  <!-- Google Fonts & Icons -->
+  <title>Control de Ruteo - Cargar y Enviar Cards</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
   <style>
     :root {
@@ -17,11 +16,12 @@
       --card-border: #334155;
       --primary: #3b82f6;
       --primary-hover: #2563eb;
-      --success: #10b981;
-      --warning: #f59e0b;
-      --danger: #ef4444;
+      --accent-purple: #8b5cf6;
+      --accent-purple-hover: #7c3aed;
       --text-main: #f8fafc;
       --text-muted: #94a3b8;
+      --success: #10b981;
+      --danger: #ef4444;
     }
 
     * {
@@ -34,16 +34,15 @@
       font-family: 'Inter', sans-serif;
       background-color: var(--bg-dark);
       color: var(--text-main);
-      min-height: 100vh;
       display: flex;
-      flex-direction: column;
-      align-items: center;
+      justify-content: center;
       padding: 2rem 1rem;
+      min-height: 100vh;
     }
 
     .container {
       width: 100%;
-      max-width: 900px;
+      max-width: 720px;
       display: flex;
       flex-direction: column;
       gap: 1.5rem;
@@ -55,8 +54,8 @@
     }
 
     header h1 {
-      font-size: 2rem;
-      font-weight: 700;
+      font-size: 2.2rem;
+      font-weight: 800;
       background: linear-gradient(135deg, #60a5fa, #a855f7);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
@@ -65,93 +64,52 @@
     header p {
       color: var(--text-muted);
       font-size: 0.95rem;
-      margin-top: 0.3rem;
+      margin-top: 0.4rem;
     }
 
     .card {
       background-color: var(--card-bg);
       border: 1px solid var(--card-border);
-      border-radius: 12px;
-      padding: 1.5rem;
-      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+      border-radius: 16px;
+      padding: 1.75rem;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
     }
 
     .card-title {
-      font-size: 1.15rem;
-      font-weight: 600;
-      margin-bottom: 1rem;
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-bottom: 1.25rem;
       display: flex;
       align-items: center;
-      gap: 0.5rem;
-    }
-
-    .actions-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1.25rem;
-    }
-
-    @media (max-width: 640px) {
-      .actions-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.5rem;
-      padding: 0.85rem 1.25rem;
-      font-size: 1rem;
-      font-weight: 600;
-      color: #ffffff;
-      background-color: var(--primary);
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      width: 100%;
-      text-align: center;
-    }
-
-    .btn:hover {
-      background-color: var(--primary-hover);
-      transform: translateY(-1px);
-    }
-
-    .btn:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    .btn-success {
-      background-color: #059669;
-    }
-    .btn-success:hover {
-      background-color: #047857;
+      justify-content: space-between;
     }
 
     .form-group {
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
+      gap: 0.6rem;
     }
 
     label {
-      font-size: 0.85rem;
-      font-weight: 500;
+      font-size: 0.9rem;
+      font-weight: 600;
       color: var(--text-muted);
     }
 
+    .date-row {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
     input[type="date"] {
-      padding: 0.75rem;
-      border-radius: 8px;
+      flex: 1;
+      padding: 0.9rem 1rem;
+      border-radius: 10px;
       border: 1px solid var(--card-border);
       background-color: #0f172a;
       color: #ffffff;
-      font-size: 0.95rem;
+      font-size: 1rem;
       outline: none;
     }
 
@@ -159,24 +117,72 @@
       border-color: var(--primary);
     }
 
+    .btn-pill {
+      padding: 0.9rem 1.2rem;
+      border-radius: 10px;
+      border: 1px solid var(--card-border);
+      background-color: #334155;
+      color: #ffffff;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s;
+    }
+
+    .btn-pill:hover {
+      background-color: #475569;
+    }
+
+    .btn-action-main {
+      margin-top: 1rem;
+      padding: 1.1rem 1.5rem;
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #ffffff;
+      background: linear-gradient(135deg, var(--primary), var(--accent-purple));
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      width: 100%;
+      box-shadow: 0 4px 14px rgba(139, 92, 246, 0.4);
+    }
+
+    .btn-action-main:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(139, 92, 246, 0.6);
+    }
+
+    .btn-action-main:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
     .status-box {
       margin-top: 1rem;
-      padding: 1rem;
-      border-radius: 8px;
+      padding: 1.2rem;
+      border-radius: 10px;
       background-color: #0f172a;
-      border-left: 4px solid var(--primary);
+      border-left: 4px solid var(--accent-purple);
       font-family: monospace;
       font-size: 0.9rem;
       white-space: pre-wrap;
-      max-height: 250px;
+      max-height: 260px;
       overflow-y: auto;
     }
 
     .badge {
       display: inline-block;
-      padding: 0.25rem 0.55rem;
+      padding: 0.3rem 0.65rem;
       font-size: 0.75rem;
-      font-weight: 600;
+      font-weight: 700;
       border-radius: 9999px;
       text-transform: uppercase;
     }
@@ -186,13 +192,14 @@
 
     .code-box {
       background-color: #0f172a;
-      padding: 1rem;
-      border-radius: 8px;
+      padding: 1.2rem;
+      border-radius: 10px;
       font-family: monospace;
       font-size: 0.85rem;
       color: #38bdf8;
       overflow-x: auto;
-      margin-top: 0.5rem;
+      margin-top: 0.75rem;
+      line-height: 1.5;
     }
   </style>
 </head>
@@ -200,76 +207,80 @@
 
 <div class="container">
   <header>
-    <h1>🚛 Control de Extracción de Ruteo Liviano</h1>
-    <p>Lectura diaria de planillas desde Google Drive e Inyección en Google Sheet (sheet - DISPO)</p>
+    <h1>🚛 Control de Ruteo & Cards Choferes</h1>
+    <p>Extracción de Planilla de Google Drive, Inyección en Sheet y Transmisión de Cards</p>
   </header>
 
-  <!-- SECCIÓN ACCIONES -->
-  <div class="card">
-    <div class="card-title">⚡ Acciones de Extracción Rápidas</div>
-    <div class="actions-grid">
-
-      <!-- Opción 1: Hoy -->
-      <div class="form-group">
-        <label>Planilla del Día (Uso Frecuente)</label>
-        <button id="btnHoy" class="btn btn-success" onclick="procesarHoy()">
-          🚀 Cargar Ruteo de Hoy
-        </button>
-      </div>
-
-      <!-- Opción 2: Trigger Manual de Envío de Cards -->
-      <div class="form-group">
-        <label>Trigger Manual: Procesar y Transmitir Paquete Diario</label>
-        <button id="btnEnviarCards" class="btn" style="background-color: #8b5cf6;" onclick="enviarCardsManual()">
-          📲 Enviar Cards Diarias a Choferes
-        </button>
-      </div>
-
-      <!-- Opción 3: Fecha Específica -->
-      <div class="form-group" style="grid-column: span 2;">
-        <label>Planilla de Fecha Específica</label>
-        <div style="display: flex; gap: 0.5rem;">
-          <input type="date" id="fechaInput" style="flex: 1;">
-          <button id="btnFecha" class="btn" onclick="procesarFecha()">
-            📅 Cargar por Fecha
-          </button>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- PANEL DE ESTADO -->
+  <!-- 1. SECCIÓN PRINCIPAL: 1 SOLO BOTÓN UNIFICADO (QoL) -->
   <div class="card">
     <div class="card-title">
-      <span>📊 Estado y Logs de Extracción</span>
+      <span>🚀 Cargar y Transmitir Cards</span>
+    </div>
+
+    <div class="form-group">
+      <label>1. Selecciona la Fecha de la Planilla a Procesar</label>
+      <div class="date-row">
+        <input type="date" id="fechaSelector">
+        <button class="btn-pill" onclick="seleccionarHoy()">📅 Usar Fecha de Hoy</button>
+      </div>
+    </div>
+
+    <!-- BOTÓN ACCIÓN PRINCIPAL 1-CLIC -->
+    <button id="btnEjecutarMain" class="btn-action-main" onclick="ejecutarCargarYEnviar()">
+      <span>🚀 Cargar Planilla y Enviar Cards a Choferes</span>
+    </button>
+  </div>
+
+  <!-- 2. PANEL DE ESTADO -->
+  <div class="card">
+    <div class="card-title">
+      <span>📊 Estado de Ejecución</span>
       <span id="badgeState" class="badge badge-success">LISTO</span>
     </div>
 
-    <div id="statusOutput" class="status-box">Seleccione una opción arriba para iniciar la extracción o el envío de cards.</div>
+    <div id="statusOutput" class="status-box">Selecciona una fecha arriba y haz clic en "Cargar Planilla y Enviar Cards" para iniciar.</div>
   </div>
 
-  <!-- SECCIÓN BOTÓN DENTRO DE GOOGLE SHEETS -->
+  <!-- 3. SECCIÓN BOTÓN DENTRO DE GOOGLE SHEETS (BUTTONSHEETS) -->
   <div class="card">
-    <div class="card-title">🔗 ¿Quieres un Botón dentro de tu Google Sheet?</div>
-    <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.75rem;">
-      Puedes agregar este snippet en Google Sheets (menú <b>Extensiones > Apps Script</b>) para ejecutar la carga e inyección directamente con un clic dentro de la planilla:
+    <div class="card-title">🔗 Menú / Botón dentro de tu Google Sheet (Apps Script)</div>
+    <p style="font-size: 0.9rem; color: var(--text-muted);">
+      Puedes pegar este script en tu planilla en <b>Extensiones > Apps Script</b>. Creará un menú <b>🚛 Ruteo Logística > 🚀 Cargar y Enviar Cards</b> directamente en Google Sheets:
     </p>
 
     <div class="code-box">
-function enviarCardsDiariasAChoferes() {
+// Agrega un menú dentro de Google Sheets automáticamente
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu('🚛 Ruteo Logística')
+    .addItem('🚀 Cargar Planilla y Enviar Cards a Choferes', 'ejecutarEnvioCards')
+    .addToUi();
+}
+
+function ejecutarEnvioCards() {
   const url = "https://dispo-yp8n.onrender.com/api/ruteo/trigger/enviar-cards";
-  const options = { method: "post", contentType: "application/json" };
+  const options = {
+    method: "post",
+    contentType: "application/json",
+    payload: JSON.stringify({ fecha: "today" }),
+    muteHttpExceptions: true
+  };
+  
   const response = UrlFetchApp.fetch(url, options);
-  SpreadsheetApp.getUi().alert("🚀 Paquete diario de Cards enviado a Choferes:\n" + response.getContentText());
+  SpreadsheetApp.getUi().alert("🚀 Paquete diario de Cards enviado a Choferes:\n\n" + response.getContentText());
 }
     </div>
   </div>
 </div>
 
 <script>
-  // Inicializar fecha por defecto en el picker
-  document.getElementById('fechaInput').valueAsDate = new Date();
+  // Inicializar fecha de hoy por defecto en el picker
+  const picker = document.getElementById('fechaSelector');
+  picker.valueAsDate = new Date();
+
+  function seleccionarHoy() {
+    picker.valueAsDate = new Date();
+  }
 
   function log(msg) {
     const output = document.getElementById('statusOutput');
@@ -278,84 +289,47 @@ function enviarCardsDiariasAChoferes() {
   }
 
   function setBusy(isBusy) {
-    document.getElementById('btnHoy').disabled = isBusy;
-    document.getElementById('btnFecha').disabled = isBusy;
+    const btn = document.getElementById('btnEjecutarMain');
+    btn.disabled = isBusy;
+
     const badge = document.getElementById('badgeState');
     if (isBusy) {
       badge.className = 'badge badge-danger';
       badge.textContent = 'PROCESANDO...';
+      btn.innerHTML = `<span>⏳ Procesando y Transmitiendo Cards...</span>`;
     } else {
       badge.className = 'badge badge-success';
       badge.textContent = 'LISTO';
+      btn.innerHTML = `<span>🚀 Cargar Planilla y Enviar Cards a Choferes</span>`;
     }
   }
 
-  async function enviarCardsManual() {
+  async function ejecutarCargarYEnviar() {
+    const fechaVal = picker.value || 'today';
     setBusy(true);
-    log('🚀 Ejecutando Trigger Manual: Extrayendo ruteo de hoy e inyectando paquete diario para choferes...');
+
+    log(`🚀 Iniciando proceso para fecha ${fechaVal}: Leyendo Google Drive, Inyectando en Sheet 'DISPO' y Transmitiendo Cards a Choferes...`);
+
     try {
-      const res = await fetch('/api/ruteo/trigger/enviar-cards', { method: 'POST' });
+      const res = await fetch('/api/ruteo/trigger/enviar-cards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fecha: fechaVal })
+      });
+
       const data = await res.json();
 
       if (data.success) {
         log(`✔ ÉXITO TRANSMISIÓN! ${data.mensaje}`);
-        log(`📊 Total cards enviadas: ${data.totalCardsEnviadas}`);
-      } else {
-        log(`❌ Error: ${data.error}`);
-      }
-    } catch (e) {
-      log(`❌ Error de conexión: ${e.message}`);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function procesarHoy() {
-    setBusy(true);
-    log('Buscando y extrayendo planilla del día actual desde Google Drive...');
-    try {
-      const res = await fetch('/api/ruteo/procesar-hoy', { method: 'POST' });
-      const data = await res.json();
-
-      if (data.success) {
-        log(`✔ ÉXITO! ${data.mensaje}`);
-        if (data.archivosProcesados && data.archivosProcesados.length > 0) {
-          log(`📄 Archivo procesado: ${data.archivosProcesados[0].name}`);
+        log(`📊 Total cards inyectadas y transmitidas: ${data.totalCardsEnviadas}`);
+        if (data.novedades && data.novedades.length > 0) {
+          log(`📄 Muestra primera card: ${data.novedades[0].nom} (${data.novedades[0].terminal} - ${data.novedades[0].horario})`);
         }
       } else {
-        log(`❌ Error: ${data.error}`);
+        log(`❌ Error: ${data.error || 'No se pudo procesar la planilla'}`);
       }
     } catch (e) {
-      log(`❌ Error de conexión: ${e.message}`);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function procesarFecha() {
-    const fecha = document.getElementById('fechaInput').value;
-    if (!fecha) {
-      alert('Por favor seleccione una fecha válida');
-      return;
-    }
-
-    setBusy(true);
-    log(`Buscando planilla para la fecha ${fecha} en Google Drive...`);
-    try {
-      const res = await fetch('/api/ruteo/procesar-fecha', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fecha })
-      });
-      const data = await res.json();
-
-      if (data.success) {
-        log(`✔ ÉXITO! ${data.mensaje}`);
-      } else {
-        log(`❌ Error: ${data.error}`);
-      }
-    } catch (e) {
-      log(`❌ Error de conexión: ${e.message}`);
+      log(`❌ Error de conexión con el servidor: ${e.message}`);
     } finally {
       setBusy(false);
     }
