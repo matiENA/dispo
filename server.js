@@ -35,10 +35,6 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('/app', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'app.html'));
-});
-
 // =================================================================
 // 1. HEALTH CHECK & DIAGNÓSTICO
 // =================================================================
